@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTFS Route Planning Portal</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/MarkerCluster.Default.css" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1><i class="fas fa-map"></i> GTFS Portal</h1>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="stops"><i class="fas fa-bus-alt"></i> Stops</button>
+                <button class="tab-btn" data-tab="routes"><i class="fas fa-route"></i> Routes</button>
+                <button class="tab-btn" data-tab="pathfind"><i class="fas fa-directions"></i> Pathfinding</button>
+                <button class="tab-btn" data-tab="network"><i class="fas fa-network-wired"></i> Network</button>
+                <button class="tab-btn" data-tab="analysis"><i class="fas fa-chart-bar"></i> Analysis</button>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- STOPS TAB -->
+                <div class="tab-content active" id="stops-tab">
+                    <div class="section">
+                        <h3>Find Stops</h3>
+                        <input type="text" id="stopId" placeholder="Stop ID (e.g., 18926)" class="input-field">
+                        <button class="btn btn-primary" onclick="getStopById()"><i class="fas fa-search"></i> Search</button>
+                    </div>
+                    <div class="section">
+                        <h3>Stop Code Search</h3>
+                        <input type="text" id="stopCode" placeholder="Stop Code (e.g., 200016)" class="input-field">
+                        <button class="btn btn-primary" onclick="getStopByCode()"><i class="fas fa-search"></i> Search</button>
+                    </div>
+                    <div class="section">
+                        <button class="btn btn-secondary" onclick="loadAllStops()"><i class="fas fa-map-pin"></i> Load All Stops</button>
+                    </div>
+                    <div class="section">
+                        <h3>Nearby Stops</h3>
+                        <input type="number" id="nearLat" placeholder="Latitude" step="0.01" class="input-field">
+                        <input type="number" id="nearLon" placeholder="Longitude" step="0.01" class="input-field">
+                        <input type="number" id="nearRadius" placeholder="Radius (m)" value="500" class="input-field">
+                        <button class="btn btn-primary" onclick="findNearestStops()"><i class="fas fa-location"></i> Find</button>
+                    </div>
+                    <div class="section">
+                        <button class="btn btn-secondary" onclick="enableAreaSelection()"><i class="fas fa-rectangle-landscape"></i> Area Selection</button>
+                    </div>
+                </div>
+
+                <!-- ROUTES TAB -->
+                <div class="tab-content" id="routes-tab">
+                    <div class="section">
+                        <h3>Top Routes</h3>
+                        <label>Number of routes:</label>
+                        <input type="number" id="topRoutesLimit" value="10" min="1" max="100" class="input-field">
+                        <button class="btn btn-primary" onclick="loadTopRoutes()"><i class="fas fa-star"></i> Load Top Routes</button>
+                    </div>
+                    <div class="section">
+                        <h3>Route Details</h3>
+                        <input type="text" id="routeId" placeholder="Route ID" class="input-field">
+                        <button class="btn btn-primary" onclick="showRouteWithStops()"><i class="fas fa-route"></i> Show Route</button>
+                    </div>
+                    <div id="routes-list" class="list-container"></div>
+                </div>
+
+                <!-- PATHFINDING TAB -->
+                <div class="tab-content" id="pathfind-tab">
+                    <div class="section">
+                        <h3>Shortest Path</h3>
+                        <input type="text" id="pathStart" placeholder="Start Stop ID" class="input-field">
+                        <input type="text" id="pathEnd" placeholder="End Stop ID" class="input-field">
+                    </div>
+                    <div class="section">
+                        <button class="btn btn-primary" onclick="runDijkstra()" style="width: 100%;"><i class="fas fa-code-branch"></i> Dijkstra</button>
+                        <button class="btn btn-primary" onclick="runAStar()" style="width: 100%; margin-top: 5px;"><i class="fas fa-star"></i> A*</button>
+                        <button class="btn btn-secondary" onclick="comparePaths()" style="width: 100%; margin-top: 5px;"><i class="fas fa-exchange"></i> Compare</button>
+                    </div>
+                    <div id="path-results" class="list-container"></div>
+                </div>
+
+                <!-- NETWORK TAB -->
+                <div class="tab-content" id="network-tab">
+                    <div class="section">
+                        <h3>Full Network</h3>
+                        <p class="info-text">Visualize all stops and routes (may take time with 7000+ stops)</p>
+                        <button class="btn btn-primary" onclick="displayFullNetwork()"><i class="fas fa-network-wired"></i> Load Network</button>
+                    </div>
+                    <div id="network-stats" class="list-container"></div>
+                </div>
+
+                <!-- ANALYSIS TAB -->
+                <div class="tab-content" id="analysis-tab">
+                    <div class="section">
+                        <h3>Busiest Stops by Time</h3>
+                        <label>Start Hour:</label>
+                        <input type="number" id="busyStart" min="0" max="23" value="6" class="input-field">
+                        <label>End Hour:</label>
+                        <input type="number" id="busyEnd" min="0" max="23" value="9" class="input-field">
+                        <button class="btn btn-primary" onclick="showBusiestStops()"><i class="fas fa-chart-bar"></i> Analyze</button>
+                    </div>
+                    <div id="busiest-results" class="list-container"></div>
+                </div>
+            </div>
+
+            <!-- Result Box -->
+            <div class="result-box">
+                <div class="result-header">
+                    <h4><i class="fas fa-info-circle"></i> Results</h4>
+                    <button class="close-btn" onclick="clearResults()">×</button>
+                </div>
+                <div id="resultBox" class="result-content">Ready</div>
+            </div>
+        </aside>
+
+        <!-- Map -->
+        <main class="map-container">
+            <div id="map"></div>
+            <div class="map-info">
+                <span id="coordDisplay">Lat: ---, Lon: ---</span>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner" style="display:none;">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

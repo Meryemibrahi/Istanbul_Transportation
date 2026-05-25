@@ -48,22 +48,25 @@ def execute_query(query: str, params: Optional[tuple] = None) -> List[Dict[str, 
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST", "localhost"),
             port=os.getenv("DB_PORT", "5432"),
-            dbname=os.getenv("DB_NAME", "gtfs_db"),
+            dbname=os.getenv("DB_NAME", "gtfs_portals"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "Mendil")
+            password=os.getenv("DB_PASSWORD", "22011937")
         )
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute(query, params)
-        results = cur.fetchall()
+        cur.execute(query, params or ())
+        rows = cur.fetchall()
+        results = [dict(row) for row in rows]
         logger.info("Query executed successfully.")
 
     except Exception as e:
-        logger.error("An error occurred while executing the query: %s", e)
+        logger.exception("An error occurred while executing the query")
+        raise
+
     finally:
-        if conn is not None:
-            conn.close()
         if cur is not None:
             cur.close()
+        if conn is not None:
+            conn.close()
 
     return results
 
@@ -106,7 +109,7 @@ def execute_scalar_query(query: str, params: Optional[tuple] = None) -> Any:
             password=os.getenv("DB_PASSWORD", "Mendil")
         )
         cur = conn.cursor()
-        cur.execute(query, params)
+        cur.execute(query, params or ())
         result = cur.fetchone()[0]
         logger.info("Scalar query executed successfully.")
 
@@ -134,7 +137,7 @@ def update_insert_delete_query(query: str, params: Optional[tuple] = None) -> No
             password=os.getenv("DB_PASSWORD", "Mendil")
         )
         cur = conn.cursor()
-        cur.execute(query, params)
+        cur.execute(query, params or ())
         conn.commit()
         logger.info("Update/Insert/Delete query executed successfully.")
 

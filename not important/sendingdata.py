@@ -63,7 +63,7 @@ def query_database(query: str, params: Optional[tuple] = None) -> List[Dict[str,
     try:
         conn = psycopg2.connect(**config())
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute(query, params)
+        cur.execute(query, params or ())
         results = cur.fetchall()
         logger.info("Query executed successfully.")
 

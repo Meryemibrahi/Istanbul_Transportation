@@ -2,14 +2,29 @@ from typing import Optional, List, Dict, Any
 from database_Creation import execute_query, update_insert_delete_query
 
 
-def get_all_routes() -> List[Dict[str, Any]]:
+def get_all_routes(limit: int = 100) -> List[Dict[str, Any]]:
     query = """
-        SELECT route_id, agency_id, route_short_name, route_long_name, 
-               route_desc, route_type, route_url, route_color, route_text_color
-        FROM routes
-        ORDER BY route_short_name
+    SELECT 
+        r.route_id,
+        r.route_short_name,
+        r.route_long_name,
+        r.route_type,
+        r.agency_id,
+        r.route_color,
+        COUNT(DISTINCT t.trip_id) AS trip_count
+    FROM routes r
+    LEFT JOIN trips t ON r.route_id = t.route_id
+    GROUP BY 
+        r.route_id,
+        r.route_short_name,
+        r.route_long_name,
+        r.route_type,
+        r.agency_id,
+        r.route_color
+    ORDER BY r.route_short_name
+    LIMIT %s
     """
-    return execute_query(query)
+    return execute_query(query, (limit,))
 
 
 def get_route_by_id(route_id: str) -> Dict[str, Any]:

@@ -1,0 +1,515 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f5f5;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+/* ==================== SIDEBAR ====================*/
+.sidebar {
+    width: 350px;
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.sidebar-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.sidebar-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px;
+}
+
+/* Tabs Navigation */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f9f9f9;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    color: #666;
+    font-weight: 500;
+}
+
+.tab-btn:hover {
+    background: #f0f0f0;
+}
+
+.tab-btn.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+}
+
+.tab-btn i {
+    margin-right: 5px;
+}
+
+/* Sidebar Content */
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.section {
+    background: #f9f9f9;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.section p {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.info-text {
+    font-size: 11px;
+    color: #999;
+    margin-top: 8px;
+    display: block;
+}
+
+/* Input Fields */
+.input-field {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 12px;
+    transition: border-color 0.3s;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: #e8eef5;
+    color: #667eea;
+    border: 1px solid #d0dae8;
+}
+
+.btn-secondary:hover {
+    background: #d0dae8;
+}
+
+/* Checkbox Labels */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    cursor: pointer;
+    font-size: 12px;
+    color: #333;
+}
+
+.checkbox-label input[type="checkbox"] {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+}
+
+/* Info Box */
+.info-box {
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #666;
+}
+
+.info-box p {
+    margin: 4px 0;
+}
+
+/* Result Box */
+.result-box {
+    margin-top: auto;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    border-radius: 0;
+    max-height: 200px;
+    display: flex;
+    flex-direction: column;
+}
+
+.result-header {
+    padding: 12px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f9f9f9;
+}
+
+.result-header h4 {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0;
+    color: #333;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+.result-content {
+    padding: 12px;
+    font-size: 11px;
+    color: #666;
+    overflow-y: auto;
+    flex: 1;
+    line-height: 1.4;
+}
+
+/* ==================== MAP ====================*/
+.map-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.map-info {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 400;
+}
+
+#coordDisplay {
+    color: #666;
+    font-weight: 500;
+}
+
+/* Custom Markers */
+.marker-popup {
+    font-size: 12px;
+    color: #333;
+}
+
+.marker-popup strong {
+    color: #667eea;
+}
+
+/* ==================== LOADING SPINNER ====================*/
+.loading-spinner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-spinner p {
+    color: white;
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+/* ==================== RESPONSIVE ====================*/
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: 40%;
+        border-right: none;
+        border-top: 1px solid #e0e0e0;
+        transform: translateY(0);
+        transition: transform 0.3s ease;
+        z-index: 500;
+    }
+
+    .sidebar.mobile-open {
+        height: 60%;
+    }
+
+    .sidebar-toggle {
+        display: block;
+    }
+
+    .map-container {
+        flex: 1;
+        height: 60%;
+    }
+
+    .tabs {
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        flex: 0 1 calc(25% - 4px);
+        margin: 2px;
+    }
+
+    .sidebar-content {
+        max-height: 200px;
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .result-box {
+        max-height: 100px;
+    }
+
+    .result-content {
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar-header h1 {
+        font-size: 16px;
+    }
+
+    .section {
+        padding: 10px;
+    }
+
+    .section h3 {
+        font-size: 12px;
+    }
+
+    .btn, .input-field {
+        font-size: 11px;
+    }
+
+    .tab-btn {
+        flex: 0 1 calc(25% - 2px);
+        padding: 8px;
+        font-size: 10px;
+    }
+
+    .tab-btn i {
+        margin-right: 2px;
+    }
+}
+
+/* ==================== LEAFLET OVERRIDES ====================*/
+.leaflet-container {
+    background: #e0e0e0;
+    font-family: inherit;
+}
+
+.leaflet-control-attribution {
+    font-size: 10px;
+}
+
+.leaflet-popup-content {
+    margin: 0;
+    font-size: 12px;
+}
+
+.leaflet-popup-close-button {
+    width: 20px;
+    height: 20px;
+    font-size: 16px;
+}
+
+/* Marker Cluster styling */
+.marker-cluster {
+    background-clip: padding-box;
+    border-radius: 40px;
+}
+
+.marker-cluster div {
+    width: 30px;
+    height: 30px;
+    margin-left: 5px;
+    margin-top: 5px;
+    text-align: center;
+    border-radius: 15px;
+    font: 12px "Helvetica Neue", Arial, Helvetica, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.marker-cluster-small {
+    background-color: #81c784;
+}
+
+.marker-cluster-small div {
+    background-color: #66bb6a;
+}
+
+.marker-cluster-medium {
+    background-color: #64b5f6;
+}
+
+.marker-cluster-medium div {
+    background-color: #42a5f5;
+}
+
+.marker-cluster-large {
+    background-color: #ef5350;
+}
+
+.marker-cluster-large div {
+    background-color: #e53935;
+}
+
+/* Scrollbar styling */
+.sidebar-content::-webkit-scrollbar,
+.result-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track,
+.result-content::-webkit-scrollbar-track {
+    background: #f0f0f0;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb,
+.result-content::-webkit-scrollbar-thumb {
+    background: #ddd;
+    border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover,
+.result-content::-webkit-scrollbar-thumb:hover {
+    background: #bbb;
+}
