@@ -29,10 +29,6 @@ def get_route(route_id: str = Path(..., description="The ID of the route to retr
         raise HTTPException(status_code=404, detail="Route not found")
     return route_data
 
-@router.get("/paths")
-def get_paths(route_id: str = Query(..., description="The ID of the route for which to retrieve paths"), date: str = Query(..., description="The date for which to retrieve paths")) -> List[Dict[str, Any]]:
-    return get_paths_for_route_date(route_id, date)
-
 @router.get("/trips/{trip_id}")
 def get_trip(trip_id: str = Path(..., description="The ID of the trip to retrieve")) -> Dict[str, Any]:
     """

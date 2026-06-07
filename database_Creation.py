@@ -25,7 +25,7 @@ def connect_Database():
             port=os.getenv("DB_PORT", "5432"),
             dbname=os.getenv("DB_NAME", "gtfs_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "Mendil")
+            password=os.getenv("DB_PASSWORD")
         )
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         logger.info("Successfully connected to the database.")
@@ -50,12 +50,11 @@ def execute_query(query: str, params: Optional[tuple] = None) -> List[Dict[str, 
             port=os.getenv("DB_PORT", "5432"),
             dbname=os.getenv("DB_NAME", "gtfs_portals"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "22011937")
+            password=os.getenv("DB_PASSWORD")
         )
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute(query, params or ())
-        rows = cur.fetchall()
-        results = [dict(row) for row in rows]
+        cur.execute(query, params)
+        results = [dict(row) for row in cur.fetchall()]
         logger.info("Query executed successfully.")
 
     except Exception as e:
@@ -81,7 +80,7 @@ def test_database_connection():
             port=os.getenv("DB_PORT", "5432"),
             dbname=os.getenv("DB_NAME", "gtfs_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "Mendil")
+            password=os.getenv("DB_PASSWORD")
         )
         cur = conn.cursor()
         cur.execute('SELECT version()')
@@ -106,7 +105,7 @@ def execute_scalar_query(query: str, params: Optional[tuple] = None) -> Any:
             port=os.getenv("DB_PORT", "5432"),
             dbname=os.getenv("DB_NAME", "gtfs_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "Mendil")
+            password=os.getenv("DB_PASSWORD")
         )
         cur = conn.cursor()
         cur.execute(query, params or ())
@@ -134,7 +133,7 @@ def update_insert_delete_query(query: str, params: Optional[tuple] = None) -> No
             port=os.getenv("DB_PORT", "5432"),
             dbname=os.getenv("DB_NAME", "gtfs_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "Mendil")
+            password=os.getenv("DB_PASSWORD")
         )
         cur = conn.cursor()
         cur.execute(query, params or ())
