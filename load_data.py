@@ -49,7 +49,7 @@ def get_connection():
         port=os.getenv("DB_PORT", "5432"),
         dbname=os.getenv("DB_NAME", "gtfs_db"),
         user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "Mendil")
+        password=os.getenv("DB_PASSWORD")
     )
 
 def load_csv_to_table(csv_file, table_name):

@@ -12,7 +12,7 @@ from Query_tables import (
     get_all_realtime_vehicles,
     get_realtime_vehicle_by_id,
     get_vehicle_trajectory,
-    get_vehicles_at_stop
+    #get_vehicles_at_stop
 )
 
 router = APIRouter()
@@ -75,10 +75,10 @@ def get_vehicle_trajectory_endpoint(vehicle_id: str = Path(..., description="The
     
     return trajectory_data
 
-@router.get("/realtime/stops/{stop_id}/vehicles")
-def get_vehicles_at_stop_endpoint(stop_id: str = Path(..., description="The ID of the stop"), within_meters: int = Query(500, description="Search radius in meters")) -> List[Dict[str, Any]]:
-    """
-    Retrieve vehicles that are currently at or near a specific stop.
-    """
-    vehicles_data = get_vehicles_at_stop(stop_id, within_meters)
-    return vehicles_data
+# @router.get("/realtime/stops/{stop_id}/vehicles")
+# def get_vehicles_at_stop_endpoint(stop_id: str = Path(..., description="The ID of the stop"), within_meters: int = Query(500, description="Search radius in meters")) -> List[Dict[str, Any]]:
+#     """
+#     Retrieve vehicles that are currently at or near a specific stop.
+#     """
+#     vehicles_data = get_vehicles_at_stop(stop_id, within_meters)
+#     return vehicles_data
