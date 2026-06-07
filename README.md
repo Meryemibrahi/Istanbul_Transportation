@@ -1,6 +1,6 @@
 # GTFS Query Portal
 
-A GTFS-based spatial and spatio-temporal query portal for public transportation data using PostgreSQL, PostGIS, and Flask.
+A GTFS-based spatial and spatio-temporal query portal for public transportation data using PostgreSQL, PostGIS, and FastAPI.
 
 ## Overview
 
