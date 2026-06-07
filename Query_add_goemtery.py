@@ -3,12 +3,6 @@ add_geometry sql
 done!
  """
 
-import logging
-from typing import Optional, List, Dict, Any
-
-logger = logging.getLogger(__name__)
-
-
 def add_geometry():
     return """
     ALTER TABLE stops ADD COLUMN geom geometry(Point, 4326);

@@ -9,33 +9,60 @@ import pandas as pd
 import logging
 from dotenv import load_dotenv
 
+POSSIBLE_ENCODINGS = [
+    "utf-8",
+    "utf-8-sig",
+    "cp1254",
+    "iso-8859-9",
+    "latin-1",
+    "iso-8859-1",
+    "cp1252",
+    "utf-16"
+]
+
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def read_csv_with_encoding(file_path):
+    last_error = None
+
+    for encoding in POSSIBLE_ENCODINGS:
+        try:
+            logger.info(f"Trying to read {file_path} with encoding: {encoding}")
+            df = pd.read_csv(file_path, encoding=encoding)
+            logger.info(f"Successfully read {file_path} with encoding: {encoding}")
+            return df
+
+        except UnicodeDecodeError as e:
+            last_error = e
+            logger.warning(f"Failed with encoding {encoding}: {e}")
+
+    raise last_error
+
 def get_connection():
     return psycopg2.connect(
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        dbname=os.getenv("DB_NAME", "gtfs_db"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", "Mendil")
     )
 
 def load_csv_to_table(csv_file, table_name):
-    """Load a CSV file into a PostgreSQL table"""
     try:
         logger.info(f"Loading {csv_file} into {table_name}...")
         
         # Read CSV
-        df = pd.read_csv(f"data/{csv_file}")
-        
+        df = read_csv_with_encoding(f"data/{csv_file}")        
         # Connect to database
         conn = get_connection()
         cur = conn.cursor()
         
-        # Clear existing data
+        # Clear data from before
         cur.execute(f"TRUNCATE TABLE {table_name};")
         
         # Insert data
@@ -56,7 +83,6 @@ def load_csv_to_table(csv_file, table_name):
         raise
 
 def main():
-    """Load all GTFS data"""
     logger.info("Starting GTFS data import...")
     
     try:

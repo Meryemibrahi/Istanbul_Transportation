@@ -1,6 +1,6 @@
 """
 Creation of the tables in the database
-
+done!
 """
 
 def create_agency_table():
@@ -177,4 +177,4 @@ def create_transit_edges_table():
 
     ALTER TABLE transit_edges
     ADD PRIMARY KEY (id);
-    """
+    """ 

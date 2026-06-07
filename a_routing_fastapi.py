@@ -28,7 +28,7 @@ class Stop(BaseModel):
 
 router = APIRouter()
 
-@router.post("/shortest", response_model=List[Stop])
+@router.get("/shortest", response_model=List[Stop])
 def get_shortest_route(start: str = Query(..., description="Start stop ID"), end: str = Query(..., description="End stop ID")) -> List[Stop]:
     return get_shortest_path(start, end)
 

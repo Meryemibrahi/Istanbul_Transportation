@@ -54,7 +54,7 @@ def execute_query(query: str, params: Optional[tuple] = None) -> List[Dict[str, 
         )
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute(query, params)
-        results = cur.fetchall()
+        results = [dict(row) for row in cur.fetchall()]
         logger.info("Query executed successfully.")
 
     except Exception as e:

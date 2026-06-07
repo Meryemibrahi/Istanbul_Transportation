@@ -13,7 +13,8 @@ from contextlib import asynccontextmanager
 import logging
 import os
 
-from database_Creation import test_database_connection
+from database_Creation import connect_Database, test_database_connection
+from load_data import main as load_gtfs_data
 from a_gtfs import router as gtfs
 from a_stops_fastapi import router as stops
 from a_realtime import router as realtime
@@ -35,8 +36,11 @@ async def lifespan(app: FastAPI):
     try:
         test_database_connection()
         logger.info("Database connection successful")
+        logger.info("Loading GTFS data...")
+        load_gtfs_data()
+        logger.info("GTFS data loaded successfully")
     except Exception as e:
-        logger.error(f"Database connection failed: {e}")
+        logger.error(f"Startup failed: {e}")
         raise
     
     yield
@@ -59,11 +63,12 @@ app.include_router(stops, prefix="/stops")
 app.include_router(realtime, prefix="/realtime")
 app.include_router(routes, prefix="/routing")
 
+connect_Database()
 
 if __name__ == "__main__":
     import uvicorn
     
-    host = os.getenv("API_HOST")
+    host = os.getenv("API_HOST", "localhost")
     port = int(os.getenv("API_PORT"))
     
     logger.info(f"Starting server on {host}:{port}")
