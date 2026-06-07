@@ -2,4 +2,5 @@
 .env
 .env.local
 info.ini
-.pyc
+__pycache__/
+*.pyc

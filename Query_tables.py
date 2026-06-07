@@ -59,7 +59,7 @@ def get_stop_by_id(stop_id: str) -> Dict[str, Any]:
         WHERE stop_id = %s
     """
     results = execute_query(query, (stop_id,))
-    return results if results else {}
+    return results[0] if results else {}
 
 
 def get_stops_near(lat: float, lon: float, radius: int = 500) -> List[Dict[str, Any]]:
