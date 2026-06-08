@@ -458,4 +458,87 @@ def get_paths_for_route_date(route_id: str, service_id: Optional[str] = None) ->
         return execute_query(query, (route_id,))
 
 
+# ============================================================================
+# MOBILITYDB QUERIES
+# ============================================================================
 
+def get_mobility_trajectories() -> List[Dict[str, Any]]:
+    """
+    Retrieve full vehicle trajectories as GeoJSON lines.
+    """
+    query = """
+        SELECT
+            vehicle_id,
+            route_id,
+            ST_AsGeoJSON(trajectory(traj)) AS geojson
+        FROM vehicle_trajectories
+    """
+    return execute_query(query)
+
+
+def get_mobility_positions_at_time(timestamp: str) -> List[Dict[str, Any]]:
+    """
+    Retrieve vehicle positions at a specific timestamp as GeoJSON points.
+    """
+    query = """
+        SELECT
+            vehicle_id,
+            route_id,
+            ST_AsGeoJSON(valueAtTimestamp(traj, %s::timestamptz)) AS geojson
+        FROM vehicle_trajectories
+        WHERE valueAtTimestamp(traj, %s::timestamptz) IS NOT NULL
+    """
+    return execute_query(query, (timestamp, timestamp))
+
+
+def get_mobility_trajectories_in_window(
+    min_lon: float,
+    min_lat: float,
+    max_lon: float,
+    max_lat: float
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve trajectories whose path intersects the selected spatial window.
+    """
+    query = """
+        SELECT
+            vehicle_id,
+            route_id,
+            ST_AsGeoJSON(trajectory(traj)) AS geojson
+        FROM vehicle_trajectories
+        WHERE ST_Intersects(
+            trajectory(traj),
+            ST_MakeEnvelope(%s, %s, %s, %s, 4326)
+        )
+    """
+    return execute_query(query, (min_lon, min_lat, max_lon, max_lat))
+
+
+def get_mobility_clipped_trajectories_in_window(
+    min_lon: float,
+    min_lat: float,
+    max_lon: float,
+    max_lat: float
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve only the part of each trajectory inside the selected window.
+    """
+    query = """
+        SELECT
+            vehicle_id,
+            route_id,
+            ST_AsGeoJSON(
+                trajectory(
+                    atGeometry(traj, ST_MakeEnvelope(%s, %s, %s, %s, 4326))
+                )
+            ) AS geojson
+        FROM vehicle_trajectories
+        WHERE atGeometry(traj, ST_MakeEnvelope(%s, %s, %s, %s, 4326)) IS NOT NULL
+    """
+    return execute_query(
+        query,
+        (
+            min_lon, min_lat, max_lon, max_lat,
+            min_lon, min_lat, max_lon, max_lat
+        )
+    )

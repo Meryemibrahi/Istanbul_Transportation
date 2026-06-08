@@ -14,4 +14,7 @@ CREATE INDEX transit_edges_target_idx ON transit_edges(target);
 CREATE INDEX transit_edges_geom_gix ON transit_edges USING GIST (geom);
 CREATE INDEX transit_edges_from_stop_idx ON transit_edges(from_stop_id);
 CREATE INDEX transit_edges_to_stop_idx ON transit_edges(to_stop_id);
+CREATE INDEX IF NOT EXISTS vehicle_trajectories_traj_gix
+ON vehicle_trajectories
+USING GIST (traj);
 ----
