@@ -33,8 +33,39 @@ JOIN trips t
  AND rs.shape_id = t.shape_id
 GROUP BY rs.route_id, rs.route_short_name, rs.route_long_name, rs.shape_id, rs.geom;
 
------
 
+INSERT INTO realtime_vehicles (vehicle_id, route_id, latitude, longitude, heading, speed, "timestamp")
+VALUES
+('V1', '7459', 41.0001, 28.9801, 90, 35, '2026-05-25 08:00:00+03'),
+('V1', '7459', 41.0020, 28.9850, 92, 36, '2026-05-25 08:05:00+03'),
+('V1', '7459', 41.0045, 28.9900, 95, 34, '2026-05-25 08:10:00+03'),
+('V2', '7105', 41.0100, 28.9500, 180, 28, '2026-05-25 08:00:00+03'),
+('V2', '7105', 41.0125, 28.9550, 182, 30, '2026-05-25 08:05:00+03'),
+('V2', '7105', 41.0150, 28.9600, 185, 29, '2026-05-25 08:10:00+03');
+
+TRUNCATE vehicle_trajectories;
+
+
+TRUNCATE vehicle_trajectories;
+
+INSERT INTO vehicle_trajectories (vehicle_id, route_id, traj)
+SELECT
+    vehicle_id,
+    route_id,
+    tgeompointseq(
+        array_agg(
+            tgeompoint(
+                ST_SetSRID(ST_MakePoint(longitude, latitude), 4326),
+                "timestamp"
+            )
+            ORDER BY "timestamp"
+        )
+    )
+FROM realtime_vehicles
+GROUP BY vehicle_id, route_id;
+
+
+-----
 
 --Full network output
 --Input needed: none
@@ -444,3 +475,47 @@ FROM tsp_route_steps
 WHERE edge <> -1;
 
 
+--MobilityDB trajectory output
+--Input needed: none
+--Output returned: vehicle_id, route_id, geojson
+--Used for: displaying the full vehicle trajectory on the map as a line feature
+SELECT
+    vehicle_id,
+    route_id,
+    ST_AsGeoJSON(trajectory(traj)) AS geojson
+FROM vehicle_trajectories;
+
+--MobilityDB position at a specific time
+--Input needed: timestamp
+--Output returned: vehicle_id, route_id, geojson
+--Used for: displaying vehicle positions on the map at a selected time as point markers
+SELECT
+    vehicle_id,
+    route_id,
+    ST_AsGeoJSON(valueAtTimestamp(traj, TIMESTAMPTZ '2026-05-25 08:05:00+03')) AS geojson
+FROM vehicle_trajectories;
+
+--MobilityDB spatial window output
+--Input needed: min_lon, min_lat, max_lon, max_lat
+--Output returned: vehicle_id, route_id, geojson
+--Used for: displaying only the trajectories that intersect a selected geographic area
+SELECT
+    vehicle_id,
+    route_id,
+    ST_AsGeoJSON(trajectory(traj)) AS geojson
+FROM vehicle_trajectories
+WHERE ST_Intersects(
+    trajectory(traj),
+    ST_MakeEnvelope(28.95, 41.00, 29.10, 41.10, 4326)
+);
+
+--MobilityDB clipped trajectory output
+--Input needed: min_lon, min_lat, max_lon, max_lat
+--Output returned: vehicle_id, route_id, clipped_traj
+--Used for: displaying only the part of the vehicle trajectory that lies inside the selected area
+SELECT
+    vehicle_id,
+    route_id,
+    atGeometry(traj, ST_MakeEnvelope(28.95, 41.00, 29.10, 41.10, 4326)) AS clipped_traj
+FROM vehicle_trajectories
+WHERE atGeometry(traj, ST_MakeEnvelope(28.95, 41.00, 29.10, 41.10, 4326)) IS NOT NULL;

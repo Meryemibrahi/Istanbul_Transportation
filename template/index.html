@@ -30,6 +30,7 @@
                 <button class="tab-btn" data-tab="pathfind"><i class="fas fa-directions"></i> Pathfinding</button>
                 <button class="tab-btn" data-tab="network"><i class="fas fa-network-wired"></i> Network</button>
                 <button class="tab-btn" data-tab="analysis"><i class="fas fa-chart-bar"></i> Analysis</button>
+                <button class="tab-btn" data-tab="mobility"><i class="fas fa-truck"></i> Mobility</button>
             </div>
 
             <div class="sidebar-content">
@@ -113,7 +114,42 @@
                     </div>
                     <div id="busiest-results" class="list-container"></div>
                 </div>
+                
+                <div class="tab-content" id="mobility-tab">
+    <div class="section">
+        <h3>MobilityDB</h3>
+
+        <button class="btn btn-primary" onclick="loadMobilityTrajectories()">
+            <i class="fas fa-route"></i> Show All Trajectories
+        </button>
+
+        <label for="mobilityTime">Timestamp</label>
+        <input type="text" id="mobilityTime" placeholder="2026-05-25 08:05:00+03" class="input-field">
+        <button class="btn btn-primary" onclick="loadMobilityAtTime()">
+            <i class="fas fa-clock"></i> Show Positions At Time
+        </button>
+
+        <label for="minLon">Min Lon</label>
+        <input type="number" step="any" id="minLon" value="28.95" class="input-field">
+
+        <label for="minLat">Min Lat</label>
+        <input type="number" step="any" id="minLat" value="41.00" class="input-field">
+
+        <label for="maxLon">Max Lon</label>
+        <input type="number" step="any" id="maxLon" value="29.10" class="input-field">
+
+        <label for="maxLat">Max Lat</label>
+        <input type="number" step="any" id="maxLat" value="41.10" class="input-field">
+
+        <button class="btn btn-primary" onclick="loadMobilityWindow()">
+            <i class="fas fa-draw-polygon"></i> Show Trajectories In Window
+        </button>
+    </div>
+</div>
+
+
             </div>
+
 
             <!-- Result Box -->
             <div class="result-box">

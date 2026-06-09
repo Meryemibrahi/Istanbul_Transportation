@@ -23,6 +23,7 @@ from a_stops_fastapi import router as stops
 from a_realtime import router as realtime
 from a_routing_fastapi import router as routes
 from a_analysis_fastapi import router as analysis
+from a_mobility import router as mobility
 
 
 load_dotenv()
@@ -75,6 +76,7 @@ app.include_router(stops, prefix="/stops")
 app.include_router(realtime, prefix="/realtime")
 app.include_router(routes, prefix="/routing")
 app.include_router(analysis, prefix="/analysis")
+app.include_router(mobility, prefix="/mobility")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

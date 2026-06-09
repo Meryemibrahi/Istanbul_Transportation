@@ -156,3 +156,23 @@ GROUP BY
 
 ALTER TABLE transit_edges
 ADD PRIMARY KEY (id);
+
+DROP TABLE IF EXISTS realtime_vehicles;
+
+CREATE TABLE realtime_vehicles (
+    vehicle_id TEXT,
+    route_id TEXT,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    heading DOUBLE PRECISION,
+    speed DOUBLE PRECISION,
+    "timestamp" TIMESTAMPTZ,
+    PRIMARY KEY (vehicle_id, "timestamp")
+);
+
+CREATE TABLE vehicle_trajectories (
+    vehicle_id TEXT,
+    route_id TEXT,
+    traj tgeompoint,
+    PRIMARY KEY (vehicle_id, route_id)
+);

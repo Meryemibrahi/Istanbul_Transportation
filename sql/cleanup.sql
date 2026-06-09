@@ -5,3 +5,4 @@ DROP TABLE IF EXISTS stops;
 DROP TABLE IF EXISTS routes;
 DROP TABLE IF EXISTS calendar;
 DROP TABLE IF EXISTS agency;
+DROP TABLE IF EXISTS vehicle_trajectories;

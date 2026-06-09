@@ -507,4 +507,146 @@ async function showBusiestStops() {
     }
 }
 
-window.addEventListener('DOMContentLoaded', initMap);
+// ==================== MOBILITYDB FUNCTIONS ====================
+async function loadMobilityTrajectories() {
+    showSpinner(true);
+    try {
+        layers.results.clearLayers();
+
+        const res = await fetch(`${API_BASE_URL}/mobility/trajectories`);
+        if (!res.ok) throw new Error('Failed to load trajectories');
+
+        const data = await res.json();
+
+        L.geoJSON(data, {
+            style: {
+                color: '#8e44ad',
+                weight: 4,
+                opacity: 0.8
+            },
+            onEachFeature: function (feature, layer) {
+                const props = feature.properties || {};
+                layer.bindPopup(`
+                    <b>Vehicle:</b> ${props.vehicle_id || 'N/A'}<br>
+                    <b>Route:</b> ${props.route_id || 'N/A'}
+                `);
+            }
+        }).addTo(layers.results);
+
+        if (data.features && data.features.length > 0) {
+            const bounds = L.geoJSON(data).getBounds();
+            if (bounds.isValid()) map.fitBounds(bounds);
+        }
+
+        setResult(`<h4>MobilityDB Trajectories</h4>
+                   Loaded ${data.features ? data.features.length : 0} trajectory feature(s).`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function loadMobilityAtTime() {
+    const timestamp = document.getElementById('mobilityTime').value;
+    if (!timestamp) return setResult('Enter a timestamp');
+
+    showSpinner(true);
+    try {
+        layers.results.clearLayers();
+
+        const res = await fetch(`${API_BASE_URL}/mobility/at-time?timestamp=${encodeURIComponent(timestamp)}`);
+        if (!res.ok) throw new Error('Failed to load positions at time');
+
+        const data = await res.json();
+
+        L.geoJSON(data, {
+            pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 7,
+                    color: '#e74c3c',
+                    weight: 2,
+                    fillOpacity: 0.9
+                });
+            },
+            onEachFeature: function (feature, layer) {
+                const props = feature.properties || {};
+                layer.bindPopup(`
+                    <b>Vehicle:</b> ${props.vehicle_id || 'N/A'}<br>
+                    <b>Route:</b> ${props.route_id || 'N/A'}
+                `);
+            }
+        }).addTo(layers.results);
+
+        if (data.features && data.features.length > 0) {
+            const bounds = L.geoJSON(data).getBounds();
+            if (bounds.isValid()) map.fitBounds(bounds);
+        }
+
+        setResult(`<h4>MobilityDB Positions</h4>
+                   Timestamp: ${timestamp}<br>
+                   Loaded ${data.features ? data.features.length : 0} position(s).`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function loadMobilityWindow() {
+    const minLon = document.getElementById('minLon').value;
+    const minLat = document.getElementById('minLat').value;
+    const maxLon = document.getElementById('maxLon').value;
+    const maxLat = document.getElementById('maxLat').value;
+
+    if (!minLon || !minLat || !maxLon || !maxLat) {
+        return setResult('Enter all bounding box values');
+    }
+
+    showSpinner(true);
+    try {
+        layers.results.clearLayers();
+
+        const res = await fetch(
+            `${API_BASE_URL}/mobility/in-window?min_lon=${minLon}&min_lat=${minLat}&max_lon=${maxLon}&max_lat=${maxLat}`
+        );
+        if (!res.ok) throw new Error('Failed to load trajectories in window');
+
+        const data = await res.json();
+
+        L.rectangle([[minLat, minLon], [maxLat, maxLon]], {
+            color: '#3498db',
+            weight: 2,
+            fill: false
+        }).addTo(layers.results);
+
+        L.geoJSON(data, {
+            style: {
+                color: '#16a085',
+                weight: 4,
+                opacity: 0.8
+            },
+            onEachFeature: function (feature, layer) {
+                const props = feature.properties || {};
+                layer.bindPopup(`
+                    <b>Vehicle:</b> ${props.vehicle_id || 'N/A'}<br>
+                    <b>Route:</b> ${props.route_id || 'N/A'}
+                `);
+            }
+        }).addTo(layers.results);
+
+        if (data.features && data.features.length > 0) {
+            const bounds = L.geoJSON(data).getBounds();
+            if (bounds.isValid()) map.fitBounds(bounds);
+        }
+
+        setResult(`<h4>MobilityDB Spatial Window</h4>
+                   Loaded ${data.features ? data.features.length : 0} trajectory feature(s).`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+
