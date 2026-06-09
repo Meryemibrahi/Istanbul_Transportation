@@ -316,22 +316,22 @@ def get_route_with_stops(route_id: str) -> Dict:
     
     # Get stops for this route (ordered by sequence)
     stops_query = """
-        SELECT DISTINCT
+        SELECT
             s.stop_id,
             s.stop_name,
             s.stop_lat,
             s.stop_lon,
-            MIN(st.stop_sequence) as sequence
+            st.stop_sequence as sequence
         FROM routes r
         JOIN trips t ON r.route_id = t.route_id
         JOIN stop_times st ON t.trip_id = st.trip_id
         JOIN stops s ON st.stop_id = s.stop_id
         WHERE r.route_id = %s
-        GROUP BY s.stop_id, s.stop_name, s.stop_lat, s.stop_lon
-        ORDER BY sequence ASC
+        AND t.trip_id = (SELECT trip_id FROM trips WHERE route_id = %s LIMIT 1)
+        ORDER BY st.stop_sequence ASC
     """
     
-    stops = execute_query(stops_query, (route_id,))
+    stops = execute_query(stops_query, (route_id, route_id))
     
     return {
         "route": route_data[0],

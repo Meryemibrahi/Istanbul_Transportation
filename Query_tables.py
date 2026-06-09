@@ -286,7 +286,7 @@ def get_isochrone_stops(center_stop_id: str, max_cost: float) -> List[Dict[str, 
         FROM isochrone iso
         LEFT JOIN stops s ON iso.node::TEXT = s.stop_id
         WHERE s.stop_id IS NOT NULL
-        ORDER BY iso.agg_cost ASC
+        ORDER BY iso.seq ASC
     """
     return execute_query(query, (center_stop_id, max_cost))
 
