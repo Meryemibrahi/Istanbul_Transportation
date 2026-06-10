@@ -282,24 +282,3 @@ CREATE EXTENSION IF NOT EXISTS mobilitydb;
 
 ---
 
-## 12. Notes for evaluation
-
-This project is intended to demonstrate:
-- GTFS import into PostgreSQL
-- spatial SQL with PostGIS
-- shortest-path computation with pgRouting
-- interactive map-based queries in the browser
-- spatio-temporal trajectory queries with MobilityDB
-
----
-
-## 13. Recommended way to share the project
-
-To run the project on another PC, share:
-- the full project folder
-- the `data/` folder with CSV files
-- this README
-- a sample `.env` template (without private password)
-
-If the evaluator does not already have PostgreSQL extensions installed, those must be installed first before the backend can run correctly.
-
