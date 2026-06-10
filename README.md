@@ -123,15 +123,6 @@ API_PORT=8000
 API_HOST=127.0.0.1
 ```
 
-### Important note
-The current code reads **`DB_NAME`**, not `DB_DATABASE`.
-So if `.env.example` contains `DB_DATABASE`, replace it with:
-
-```env
-DB_NAME=gtfs_portals
-```
-
----
 
 ## 6. Python environment setup
 
@@ -220,65 +211,6 @@ The frontend should allow testing of:
 - spatial window query
 - nearest-neighbor style queries
 - MobilityDB trajectory visualization
-
----
-
-## 10. Quick test checklist
-
-After opening the app:
-
-### Browser tests
-- load a route from the **Explore** tab
-- find nearest stops from the **Spatial Tools** tab
-- draw a window query on the map
-- run Dijkstra or A* from the **Routing** tab
-- show all trajectories from the **Mobility** tab
-
-### API tests
-Open `/docs` and test:
-- `GET /stops/{stop_id}`
-- `GET /stops/nearest`
-- `GET /stops/inarea`
-- `GET /analysis/dijkstra`
-- `GET /analysis/astar`
-- `GET /mobility/trajectories`
-- `GET /mobility/at-time`
-- `GET /mobility/in-window`
-
----
-
-## 11. Known issues / troubleshooting
-
-### 1. `ModuleNotFoundError: No module named 'pandas'`
-Install pandas:
-
-```bash
-pip install pandas
-```
-
-### 2. Database authentication failed
-Check `.env`:
-- `DB_NAME`
-- `DB_USER`
-- `DB_PASSWORD`
-
-### 3. Frontend opens but buttons do not return results
-Check that:
-- the backend is running
-- `/docs` opens correctly
-- the frontend files in use are:
-  - `template/index.html`
-  - `static/app.js`
-
-### 4. Map container already initialized
-Make sure `initMap()` is only called once in `static/app.js`.
-
-### 5. MobilityDB functions fail
-Check that the extension is installed in the same database:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS mobilitydb;
-```
 
 ---
 
