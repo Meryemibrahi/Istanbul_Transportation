@@ -1,6 +1,6 @@
 """
 add_geometry sql
-done!
+
  """
 
 def add_geometry():
@@ -25,17 +25,3 @@ def add_geometry():
     """
 
 
-def add_time_to_seconds_function():
-    return """
-    CREATE OR REPLACE FUNCTION gtfs_time_to_seconds(t text)
-    RETURNS integer AS $$
-    SELECT
-        CASE
-            WHEN t ~ '^\d+:\d{2}:\d{2}$' THEN
-                split_part(t, ':', 1)::int * 3600 +
-                split_part(t, ':', 2)::int * 60 +
-                split_part(t, ':', 3)::int
-            ELSE NULL
-        END
-    $$ LANGUAGE sql IMMUTABLE;
-    """

@@ -2,6 +2,40 @@ from typing import Optional, List, Dict, Any
 from database_Creation import execute_query, update_insert_delete_query
 
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_vertex_id_by_stop_id(stop_id: str) -> Optional[int]:
+    """
+    Convert a stop ID to its vertex ID.
+    
+    Args:
+        stop_id: The stop ID (string)
+    
+    Returns:
+        Vertex ID (integer) or None if not found
+    """
+    query = "SELECT vertex_id FROM stop_vertices WHERE stop_id = %s"
+    results = execute_query(query, (stop_id,))
+    return results[0]['vertex_id'] if results else None
+
+
+def get_stop_id_by_vertex_id(vertex_id: int) -> Optional[str]:
+    """
+    Convert a vertex ID to its stop ID.
+    
+    Args:
+        vertex_id: The vertex ID (integer)
+    
+    Returns:
+        Stop ID (string) or None if not found
+    """
+    query = "SELECT stop_id FROM stop_vertices WHERE vertex_id = %s"
+    results = execute_query(query, (vertex_id,))
+    return results[0]['stop_id'] if results else None
+
+
 def get_all_routes(limit: int = 100) -> List[Dict[str, Any]]:
     query = """
     SELECT 

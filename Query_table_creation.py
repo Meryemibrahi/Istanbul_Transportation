@@ -1,136 +1,25 @@
 """
 Creation of the tables in the database
-done!
 """
-
-def create_agency_table():
-    return """
-    CREATE TABLE agency (
-    agency_id TEXT PRIMARY KEY,
-    agency_name TEXT,
-    agency_url TEXT,
-    agency_timezone TEXT,
-    agency_lang TEXT,
-    agency_phone TEXT,
-    agency_fare_url TEXT,
-    agency_email TEXT
-    );"""
-
-def create_stops_table():
-    return """
-    CREATE TABLE stops (
-    stop_id TEXT PRIMARY KEY,
-    stop_code TEXT,
-    stop_name TEXT,
-    stop_desc TEXT,
-    stop_lat DOUBLE PRECISION,
-    stop_lon DOUBLE PRECISION,
-    zone_id TEXT,
-    stop_url TEXT,
-    location_type INTEGER,
-    parent_station TEXT,
-    stop_timezone TEXT,
-    wheelchair_boarding INTEGER
-    );"""
-
-def create_calendar_table():
-    return """
-    CREATE TABLE calendar (
-    service_id TEXT PRIMARY KEY,
-    monday INTEGER,
-    tuesday INTEGER,
-    wednesday INTEGER,
-    thursday INTEGER,
-    friday INTEGER,
-    saturday INTEGER,
-    sunday INTEGER,
-    start_date TEXT,
-    end_date TEXT
-    );"""
-
-def create_routes_table():
-    return """
-    CREATE TABLE routes (
-    route_id TEXT PRIMARY KEY,
-    agency_id TEXT,
-    route_short_name TEXT,
-    route_long_name TEXT,
-    route_desc TEXT,
-    route_type INTEGER,
-    route_url TEXT,
-    route_color TEXT,
-    route_text_color TEXT
-);"""
-
-
-def create_shapes_table():
-    return """
-    CREATE TABLE shapes (
-    shape_id TEXT,
-    shape_pt_lat DOUBLE PRECISION,
-    shape_pt_lon DOUBLE PRECISION,
-    shape_pt_sequence INTEGER,
-    shape_dist_traveled DOUBLE PRECISION,
-    PRIMARY KEY (shape_id, shape_pt_sequence)
-);"""
-
-def create_trips_table():
-    return """
-    CREATE TABLE trips (
-    route_id TEXT,
-    service_id TEXT,
-    trip_id TEXT PRIMARY KEY,
-    trip_headsign TEXT,
-    trip_short_name TEXT,
-    direction_id INTEGER,
-    block_id TEXT,
-    shape_id TEXT,
-    wheelchair_accessible INTEGER,
-    bikes_allowed INTEGER
-);"""
-
-def create_stop_times_table():
-    return """
-    CREATE TABLE stop_times (
-    trip_id TEXT,
-    arrival_time TEXT,
-    departure_time TEXT,
-    stop_id TEXT,
-    stop_sequence INTEGER,
-    stop_headsign TEXT,
-    pickup_type INTEGER,
-    drop_off_type INTEGER,
-    shape_dist_traveled DOUBLE PRECISION,
-    timepoint INTEGER,
-    PRIMARY KEY (trip_id, stop_sequence)
-);"""
 
 def create_stop_vertices_table():
     return """
     DROP TABLE IF EXISTS stop_vertices;
-
     CREATE TABLE stop_vertices AS
     SELECT
-        row_number() OVER (ORDER BY stop_id) AS vertex_id,
+        stop_id::integer AS vertex_id,
         stop_id,
         stop_name,
-        geom
+        ST_SetSRID(ST_MakePoint(stop_lon, stop_lat), 4326) AS geom
     FROM stops;
+    ALTER TABLE stop_vertices ADD PRIMARY KEY (vertex_id);
+    """
 
-    ALTER TABLE stop_vertices
-    ADD PRIMARY KEY (vertex_id);
-
-    CREATE UNIQUE INDEX stop_vertices_stop_id_idx ON stop_vertices(stop_id);
-    CREATE INDEX stop_vertices_geom_gix ON stop_vertices USING GIST (geom);
-
-    );"""
-
-
-def create_raw_transit_edges_table():
+def firststep_transit_edges():
     return """
-    DROP TABLE IF EXISTS transit_edges_raw;
+    DROP TABLE IF EXISTS transit_edges_step1;
 
-    CREATE TABLE transit_edges_raw AS
+    CREATE TABLE transit_edges_step1 AS
     SELECT
         st1.trip_id,
         st1.stop_id AS from_stop_id,
@@ -138,10 +27,10 @@ def create_raw_transit_edges_table():
         st1.stop_sequence AS from_seq,
         st2.stop_sequence AS to_seq,
         GREATEST(
-            gtfs_time_to_seconds(st2.arrival_time) -
-            gtfs_time_to_seconds(st1.departure_time),
+            turn_to_seconds(st2.arrival_time) -
+            turn_to_seconds(st1.departure_time),
             1
-        ) AS travel_seconds
+        ) AS secondsTraveled
     FROM stop_times st1
     JOIN stop_times st2
     ON st1.trip_id = st2.trip_id
@@ -149,32 +38,47 @@ def create_raw_transit_edges_table():
     WHERE st1.stop_id <> st2.stop_id;
     """
 
-def create_transit_edges_table():
+def create_transit_edges():
     return """
     DROP TABLE IF EXISTS transit_edges;
     CREATE TABLE transit_edges AS
     SELECT
         row_number() OVER () AS id,
-        v1.vertex_id AS source,
-        v2.vertex_id AS target,
+        r.from_stop_id::integer AS source,
+        r.to_stop_id::integer AS target,
         r.from_stop_id,
         r.to_stop_id,
-        AVG(r.travel_seconds)::double precision AS cost,
-        ST_MakeLine(s1.geom, s2.geom)::geometry(LineString, 4326) AS geom,
-        ST_X(s1.geom) AS x1,
-        ST_Y(s1.geom) AS y1,
-        ST_X(s2.geom) AS x2,
-        ST_Y(s2.geom) AS y2
-    FROM transit_edges_raw r
-    JOIN stop_vertices v1 ON r.from_stop_id = v1.stop_id
-    JOIN stop_vertices v2 ON r.to_stop_id = v2.stop_id
+        AVG(r.secondsTraveled)::double precision AS cost,
+        ST_MakeLine(
+            ST_SetSRID(ST_MakePoint(s1.stop_lon, s1.stop_lat), 4326),
+            ST_SetSRID(ST_MakePoint(s2.stop_lon, s2.stop_lat), 4326)
+        )::geometry(LineString, 4326) AS geom,
+        s1.stop_lon AS x1,
+        s1.stop_lat AS y1,
+        s2.stop_lon AS x2,
+        s2.stop_lat AS y2
+    FROM transit_edges_step1 r
     JOIN stops s1 ON r.from_stop_id = s1.stop_id
     JOIN stops s2 ON r.to_stop_id = s2.stop_id
     GROUP BY
-        v1.vertex_id, v2.vertex_id,
         r.from_stop_id, r.to_stop_id,
-        s1.geom, s2.geom;
+        s1.stop_lon, s1.stop_lat,
+        s2.stop_lon, s2.stop_lat;
+    ALTER TABLE transit_edges ADD PRIMARY KEY (id);
+    """
 
-    ALTER TABLE transit_edges
-    ADD PRIMARY KEY (id);
-    """ 
+
+def add_time_to_seconds_function():
+    return """
+    CREATE OR REPLACE FUNCTION turn_to_seconds(t text)
+    RETURNS integer AS $$
+    SELECT
+        CASE
+            WHEN t ~ '^\d+:\d{2}:\d{2}$' THEN
+                split_part(t, ':', 1)::int * 3600 +
+                split_part(t, ':', 2)::int * 60 +
+                split_part(t, ':', 3)::int
+            ELSE NULL
+        END
+    $$ LANGUAGE sql plpgsql;
+    """

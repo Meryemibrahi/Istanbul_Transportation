@@ -11,10 +11,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 
 import logging
 import os
+import uvicorn
+
 
 from database_Creation import connect_Database, test_database_connection
 from load_data import main as load_gtfs_data
@@ -22,7 +23,7 @@ from a_gtfs import router as gtfs
 from a_stops_fastapi import router as stops
 from a_realtime import router as realtime
 from a_routing_fastapi import router as routes
-from a_analysis_fastapi import router as analysis
+from a_algorithms import router as algorithms
 from a_mobility import router as mobility
 
 
@@ -61,37 +62,27 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Include routers
 app.include_router(gtfs, prefix="/gtfs")
 app.include_router(stops, prefix="/stops")
 app.include_router(realtime, prefix="/realtime")
 app.include_router(routes, prefix="/routing")
-app.include_router(analysis, prefix="/analysis")
+app.include_router(algorithms, prefix="/algorithms")
 app.include_router(mobility, prefix="/mobility")
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# # Mount static files
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/map")
-def map_page():
-    return FileResponse("template/index.html")
+# @app.get("/map")
+# def map_page():
+#     return FileResponse("template/index.html")
 
-@app.get("/")
-def root():
-    return FileResponse("template/index.html")
+# @app.get("/")
+# def root():
+#     return FileResponse("template/index.html")
 
-if __name__ == "__main__":
-    import uvicorn
-    
+if __name__ == "__main__":    
     host = os.getenv("API_HOST", "localhost")
     port = int(os.getenv("API_PORT"))
     

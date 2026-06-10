@@ -1,23 +1,29 @@
 """
 Load GTFS data from CSV files into PostgreSQL database
+DONE!
 """
 
 import os
 import psycopg2
-import psycopg2.extras
 import pandas as pd
 import logging
 from dotenv import load_dotenv
 
+from Query_table_creation import (
+    create_stop_vertices_table,
+    firststep_transit_edges,
+    add_time_to_seconds_function,
+    create_transit_edges
+)
+
+from Query_indexes_extenctions import (
+    create_gtfs_indexes,
+    enable_postgres_extensions
+)
+
 POSSIBLE_ENCODINGS = [
     "utf-8",
-    "utf-8-sig",
     "cp1254",
-    "iso-8859-9",
-    "latin-1",
-    "iso-8859-1",
-    "cp1252",
-    "utf-16"
 ]
 
 
@@ -27,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def read_csv_with_encoding(file_path):
+def read_csv(file_path):
     last_error = None
 
     for encoding in POSSIBLE_ENCODINGS:
@@ -56,16 +62,12 @@ def load_csv_to_table(csv_file, table_name):
     try:
         logger.info(f"Loading {csv_file} into {table_name}...")
         
-        # Read CSV
-        df = read_csv_with_encoding(f"data/{csv_file}")        
-        # Connect to database
+        df = read_csv(f"data/{csv_file}")        
         conn = get_connection()
         cur = conn.cursor()
         
-        # Clear data from before
         cur.execute(f"TRUNCATE TABLE {table_name};")
         
-        # Insert data
         for _, row in df.iterrows():
             columns = ", ".join(df.columns)
             placeholders = ", ".join(["%s"] * len(df.columns))
@@ -73,7 +75,7 @@ def load_csv_to_table(csv_file, table_name):
             cur.execute(insert_query, tuple(row))
         
         conn.commit()
-        logger.info(f"✓ Loaded {len(df)} rows into {table_name}")
+        logger.info(f"Loaded {len(df)} rows into {table_name}")
         
         cur.close()
         conn.close()
@@ -94,11 +96,34 @@ def main():
         load_csv_to_table("shapes.csv", "shapes")
         load_csv_to_table("calendar.csv", "calendar")
         
-        logger.info("✓ All data loaded successfully!")
+        logger.info("All data loaded successfully!")
         
     except Exception as e:
         logger.error(f"Failed to load data: {e}")
         raise
 
+
+def other_functions():
+    logger.info(f"Creating more tables and indexes...")
+           
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(add_time_to_seconds_function())
+    cur.execute(create_stop_vertices_table())
+    cur.execute(firststep_transit_edges())
+    cur.execute(create_transit_edges())
+
+    conn.commit()
+
+    enable_postgres_extensions(conn)
+    create_gtfs_indexes(conn)
+
+    logger.info(f"Ready to start!")
+    
+    cur.close()
+    conn.close()
+
 if __name__ == "__main__":
     main()
+    other_functions()

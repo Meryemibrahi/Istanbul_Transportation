@@ -1,6 +1,6 @@
 """
 removes all tables
-done!
+
 """
 
 def drop_tables():
