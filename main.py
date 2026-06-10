@@ -23,7 +23,7 @@ from a_gtfs import router as gtfs
 from a_stops_fastapi import router as stops
 from a_realtime import router as realtime
 from a_routing_fastapi import router as routes
-from a_algorithms import router as algorithms
+from a_algorithms import router as analysis
 from a_mobility import router as mobility
 
 
@@ -68,19 +68,19 @@ app.include_router(gtfs, prefix="/gtfs")
 app.include_router(stops, prefix="/stops")
 app.include_router(realtime, prefix="/realtime")
 app.include_router(routes, prefix="/routing")
-app.include_router(algorithms, prefix="/algorithms")
+app.include_router(analysis, prefix="/analysis")
 app.include_router(mobility, prefix="/mobility")
 
-# # Mount static files
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# @app.get("/map")
-# def map_page():
-#     return FileResponse("template/index.html")
+@app.get("/map")
+def map_page():
+    return FileResponse("template/index.html")
 
-# @app.get("/")
-# def root():
-#     return FileResponse("template/index.html")
+@app.get("/")
+def root():
+    return FileResponse("template/index.html")
 
 if __name__ == "__main__":    
     host = os.getenv("API_HOST", "localhost")

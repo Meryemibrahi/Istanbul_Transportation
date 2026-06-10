@@ -84,6 +84,33 @@ def load_csv_to_table(csv_file, table_name):
         logger.error(f"Error loading {csv_file}: {e}")
         raise
 
+def other_functions():
+    try:
+        logger.info(f"Creating more tables and indexes...")
+            
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute(add_time_to_seconds_function())
+        cur.execute(create_stop_vertices_table())
+        cur.execute(firststep_transit_edges())
+        cur.execute(create_transit_edges())
+
+        conn.commit()
+
+        enable_postgres_extensions(conn)
+        create_gtfs_indexes(conn)
+
+        logger.info(f"Ready to start!")
+    
+        cur.close()
+        conn.close()
+
+    except Exception as e:
+        logger.error(f"Error loading other functions : {e}")
+        raise
+
+
 def main():
     logger.info("Starting GTFS data import...")
     
@@ -97,33 +124,13 @@ def main():
         load_csv_to_table("calendar.csv", "calendar")
         
         logger.info("All data loaded successfully!")
+        other_functions();
         
     except Exception as e:
         logger.error(f"Failed to load data: {e}")
         raise
 
 
-def other_functions():
-    logger.info(f"Creating more tables and indexes...")
-           
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(add_time_to_seconds_function())
-    cur.execute(create_stop_vertices_table())
-    cur.execute(firststep_transit_edges())
-    cur.execute(create_transit_edges())
-
-    conn.commit()
-
-    enable_postgres_extensions(conn)
-    create_gtfs_indexes(conn)
-
-    logger.info(f"Ready to start!")
-    
-    cur.close()
-    conn.close()
 
 if __name__ == "__main__":
     main()
-    other_functions()

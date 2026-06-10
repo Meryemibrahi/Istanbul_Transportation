@@ -1,5 +1,6 @@
 """
 Creation of the tables in the database
+DONE!
 """
 
 def create_stop_vertices_table():
@@ -80,5 +81,5 @@ def add_time_to_seconds_function():
                 split_part(t, ':', 3)::int
             ELSE NULL
         END
-    $$ LANGUAGE sql plpgsql;
+    $$ LANGUAGE sql IMMUTABLE;
     """
