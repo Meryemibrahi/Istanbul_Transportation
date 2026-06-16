@@ -214,3 +214,7 @@ The frontend should allow testing of:
 
 ---
 
+# 10. Photo of the project
+
+<img width="1919" height="950" alt="WINDOW_Q" src="https://github.com/user-attachments/assets/6bb07a66-2dd0-49a7-8cef-2290c5f2d8e3" />
+
