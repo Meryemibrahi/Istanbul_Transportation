@@ -462,9 +462,9 @@ async function loadAllStops() {
         layers.stops.clearLayers();
         const mcg = L.markerClusterGroup();
 
-        stops.slice(0, 100).forEach(stop => {
+        stops.slice().forEach(stop => {
             const marker = L.circleMarker([stop.stop_lat, stop.stop_lon], {
-                radius: 4,
+                radius: 8,
                 color: '#27ae60',
                 weight: 1,
                 fillOpacity: 0.7

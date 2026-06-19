@@ -1,6 +1,6 @@
 """
 FastAPI router for advanced pathfinding and network analysis features
-done!
+done! -> complete
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -29,10 +29,6 @@ from Query_extra import (
 
 
 router = APIRouter()
-
-# ============================================================================
-#  ALGORITHMS
-# ============================================================================
 
 
 @router.get("/network")
@@ -86,15 +82,8 @@ def get_tsp_route(start_id: int, stop_ids: list[int] = Query(...)):
 
 
 
-# ============================================================================
-# NETWORK ANALYSIS
-# ============================================================================
-
 @router.get("/top-routes")
 def top_routes(limit: int = Query(10, ge=1, le=100)):
-    """
-    Get top routes by trip count
-    """
     routes = get_top_routes_by_trip_count(limit)
     if not routes:
         raise HTTPException(status_code=404, detail="No routes found")
@@ -106,9 +95,6 @@ def top_routes(limit: int = Query(10, ge=1, le=100)):
 
 @router.get("/route/{route_id}")
 def route_details(route_id: str):
-    """
-    Get a specific route and all its stops in sequence
-    """
     result = get_route_with_stops(route_id)
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])

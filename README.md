@@ -41,7 +41,6 @@ Install these first:
 - **PostGIS** extension
 - **pgRouting** extension
 - **MobilityDB** extension
-- **Git** (optional, only if cloning the repository)
 
 ### Tested Python packages
 The project currently uses:
@@ -124,39 +123,6 @@ API_HOST=127.0.0.1
 ```
 
 
-## 6. Python environment setup
-
-Open a terminal in the project root.
-
-### 6.1 Create a virtual environment
-
-```bash
-py -3.10 -m venv venv
-```
-
-### 6.2 Activate the virtual environment
-
-#### PowerShell
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-.\venv\Scripts\Activate.ps1
-```
-
-#### Command Prompt
-```cmd
-venv\Scripts\activate.bat
-```
-
-### 6.3 Install Python packages
-
-```bash
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
-pip install pandas
-```
-
----
-
 ## 7. Running the project
 
 From the project root, run:
@@ -197,9 +163,7 @@ http://127.0.0.1:8000/docs
 ## 9. What should work
 
 The project should expose these main backend groups:
-- `/gtfs`
 - `/stops`
-- `/realtime`
 - `/routing`
 - `/analysis`
 - `/mobility`

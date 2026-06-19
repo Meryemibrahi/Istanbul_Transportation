@@ -22,7 +22,7 @@ from load_data import main as load_gtfs_data
 from a_gtfs import router as gtfs
 from a_stops_fastapi import router as stops
 from a_realtime import router as realtime
-from a_routing_fastapi import router as routes
+# from a_routing_fastapi import router as routes
 from a_algorithms import router as analysis
 from a_mobility import router as mobility
 
@@ -67,7 +67,7 @@ app = FastAPI(
 app.include_router(gtfs, prefix="/gtfs")
 app.include_router(stops, prefix="/stops")
 app.include_router(realtime, prefix="/realtime")
-app.include_router(routes, prefix="/routing")
+# app.include_router(routes, prefix="/routing")
 app.include_router(analysis, prefix="/analysis")
 app.include_router(mobility, prefix="/mobility")
 

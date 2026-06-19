@@ -11,7 +11,6 @@ from Query_tables import (
     get_paths_for_route_date,
     get_trip_by_id,
     get_timetable_by_route_date,
-    get_shape_by_id
 )
 
 router = APIRouter()
@@ -43,11 +42,4 @@ def get_trip(trip_id: str = Path(..., description="The ID of the trip to retriev
 def get_timetable(route_id: str = Query(..., description="The ID of the route for which to retrieve the timetable"), date: str = Query(..., description="The date for which to retrieve the timetable")) -> List[Dict[str, Any]]:
     return get_timetable_by_route_date(route_id, date)
 
-
-@router.get("/shapes/{shape_id}")
-def get_shape(shape_id: str = Path(..., description="The ID of the shape to retrieve")) -> Dict[str, Any]:
-    shape_data = get_shape_by_id(shape_id)
-    if not shape_data:
-        raise HTTPException(status_code=404, detail="Shape not found")
-    return shape_data
 

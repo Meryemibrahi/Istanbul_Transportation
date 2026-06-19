@@ -1,6 +1,6 @@
 """
 Query functions for all paths
-DONE!
+DONE! -> complete
 """
 
 from database_Creation import execute_query, connect_Database

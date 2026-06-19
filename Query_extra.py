@@ -1,5 +1,6 @@
 """
 Needed
+DONE! -> complete
 """
 
 from typing import Dict, List
@@ -7,7 +8,6 @@ from database_Creation import execute_query
 
 
 def get_top_routes_by_trip_count(limit: int = 10) -> List[Dict]:
-    """Get routes with most trips"""
     query = """
         SELECT 
             r.route_id,
@@ -28,7 +28,6 @@ def get_top_routes_by_trip_count(limit: int = 10) -> List[Dict]:
 
 
 def get_route_with_stops(route_id: str) -> Dict:
-    """Get a specific route and all its stops in order"""
     route_query = """
         SELECT 
             r.route_id,
@@ -47,7 +46,6 @@ def get_route_with_stops(route_id: str) -> Dict:
     if not route_data:
         return {"error": f"Route {route_id} not found"}
     
-    # Get stops for this route (ordered by sequence)
     stops_query = """
         SELECT
             s.stop_id,
