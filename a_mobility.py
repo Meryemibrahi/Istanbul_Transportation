@@ -1,7 +1,7 @@
 import json
 import logging
 from fastapi import APIRouter, HTTPException, Query
-from Query_tables import (
+from RQuery_Explorer import (
     get_mobility_trajectories,
     get_mobility_positions_at_time,
     get_mobility_trajectories_in_window,

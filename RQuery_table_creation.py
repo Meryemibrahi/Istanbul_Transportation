@@ -1,6 +1,6 @@
 """
 Creation of the tables in the database
-DONE!
+DONE! -> complete
 """
 
 def create_stop_vertices_table():

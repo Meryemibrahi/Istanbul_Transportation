@@ -12,7 +12,7 @@ from typing import List, Dict
 #     get_full_network,
 #     get_route_with_stops
 # )
-from Query_tables import (
+from RQuery_Explorer import (
     get_tsp_selected_stops,
     get_tsp_cost_matrix,
     get_tsp_optimal_order,

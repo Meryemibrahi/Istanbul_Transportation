@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
-from Query_tables import (
+from RQuery_Explorer import (
     get_all_realtime_vehicles,
     get_realtime_vehicle_by_id,
     get_vehicle_trajectory,

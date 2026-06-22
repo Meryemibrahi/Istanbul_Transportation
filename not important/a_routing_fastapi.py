@@ -6,7 +6,7 @@ done!
 from fastapi import APIRouter, FastAPI, HTTPException, Path, Query
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from Query_tables import (
+from RQuery_Explorer import (
     get_isochrone_stops,
     get_shortest_path,
 )

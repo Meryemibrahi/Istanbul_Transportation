@@ -8,7 +8,7 @@ done!
 
 from dotenv import load_dotenv  
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,10 +17,10 @@ import os
 import uvicorn
 
 
-from database_Creation import connect_Database, test_database_connection
+from database_Creation import test_database_connection
 from load_data import main as load_gtfs_data
 from a_gtfs import router as gtfs
-from a_stops_fastapi import router as stops
+from Ra_explorer_fastapi import router as stops
 from a_realtime import router as realtime
 # from a_routing_fastapi import router as routes
 from a_algorithms import router as analysis
@@ -83,7 +83,7 @@ def root():
     return FileResponse("template/index.html")
 
 if __name__ == "__main__":    
-    host = os.getenv("API_HOST", "localhost")
+    host = os.getenv("API_HOST")
     port = int(os.getenv("API_PORT"))
     
     logger.info(f"Starting server on {host}:{port}")
