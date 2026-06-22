@@ -2,7 +2,7 @@
 Done!
 '''
 from typing import Optional, List, Dict, Any
-from database_Creation import execute_query, update_insert_delete_query
+from database_Creation import execute_query
 
 
 def get_route_by_id(route_id: str) -> Dict[str, Any]:
@@ -37,7 +37,7 @@ def get_stop_by_id(stop_id: str) -> Dict[str, Any]:
     results = execute_query(query, (stop_id,))
     return results[0] if results else {}
 
-def get_full_network_query():
+def get_full_network():
     query = """
     SELECT DISTINCT ON (r.route_id)
         r.route_id,

@@ -31,9 +31,6 @@ def connect_Database():
 
     except Exception as e:
         logger.error("An error occurred while connecting to the database: %s", e)
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 def execute_query(query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:

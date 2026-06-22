@@ -3,16 +3,13 @@ Stops API endpoints
 done!
 """
 
-from fastapi import APIRouter, FastAPI, HTTPException, Path, Query
-from typing import List, Dict, Any, Optional
-from math import radians, cos, sin, asin, sqrt
-from database_Creation import execute_query, connect_Database
+from fastapi import APIRouter, HTTPException, Path
+from typing import List, Dict, Any
 
 from RQuery_Explorer import (
     get_all_routes,
-    get_full_network_query,
+    get_full_network,
     get_stop_by_id,
-    get_route_by_id,
     get_all_stops
 )
 
@@ -33,3 +30,8 @@ def get_stop(stop_id: str = Path(..., description="The ID of the stop to retriev
 @router.get("/routes")
 def get_routes() -> List[Dict[str, Any]]:
     return get_all_routes()
+
+@router.get("/network")
+def full_network():
+    network = get_full_network()
+    return network

@@ -19,13 +19,12 @@ import uvicorn
 
 from database_Creation import test_database_connection
 from load_data import main as load_gtfs_data
-from a_gtfs import router as gtfs
-from Ra_explorer_fastapi import router as stops
-from a_realtime import router as realtime
-# from a_routing_fastapi import router as routes
-from a_algorithms import router as analysis
-from a_mobility import router as mobility
 
+
+from Ra_explorer import router as explorer
+from Ra_routing import router as routes
+from Ra_Spail_tools import router as spail_tools
+from Ra_advanced import router as advanced
 
 load_dotenv()
 
@@ -64,12 +63,10 @@ app = FastAPI(
 
 
 # Include routers
-app.include_router(gtfs, prefix="/gtfs")
-app.include_router(stops, prefix="/stops")
-app.include_router(realtime, prefix="/realtime")
-# app.include_router(routes, prefix="/routing")
-app.include_router(analysis, prefix="/analysis")
-app.include_router(mobility, prefix="/mobility")
+app.include_router(explorer, prefix="/explorer")
+app.include_router(routes, prefix="/routes")
+app.include_router(spail_tools, prefix="/spail-tools")
+app.include_router(advanced, prefix="/advanced")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

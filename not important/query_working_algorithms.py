@@ -7,28 +7,6 @@ from database_Creation import execute_query, connect_Database
 from fastapi import HTTPException
 
 # -----------------------------
-# FULL NETWORK
-# -----------------------------
-
-def get_full_network_query():
-    query = """
-    SELECT DISTINCT ON (r.route_id)
-        r.route_id,
-        r.route_short_name,
-        r.route_long_name,
-        ST_AsGeoJSON(
-            ST_MakeLine(
-                ST_MakePoint(s.shape_pt_lon, s.shape_pt_lat)
-                ORDER BY s.shape_pt_sequence
-            )
-        ) AS geojson
-    FROM shapes s
-    JOIN trips t ON t.shape_id = s.shape_id
-    JOIN routes r ON r.route_id = t.route_id
-    GROUP BY r.route_id, r.route_short_name, r.route_long_name, s.shape_id;
-    """
-    return execute_query(query)
-# -----------------------------
 # DIJKSTRA
 # -----------------------------
 

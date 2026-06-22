@@ -8,9 +8,6 @@ import logging
 from RQuery_Explorer import (
     get_all_routes,
     get_route_by_id,
-    get_paths_for_route_date,
-    get_trip_by_id,
-    get_timetable_by_route_date,
 )
 
 router = APIRouter()

@@ -3,7 +3,7 @@ Stops API endpoints
 done!
 """
 
-from fastapi import APIRouter, FastAPI, HTTPException, Path, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from typing import List, Dict, Any, Optional
 from math import radians, cos, sin, asin, sqrt
 from database_Creation import execute_query, connect_Database
@@ -53,11 +53,6 @@ def calculate_distance(stop1: str = Query(..., description="First stop ID"), sto
     c = 2 * asin(sqrt(a))
     distance = R * c
     return distance
-
-@router.get("/inarea")
-def get_stops_in_area(min_lat: float = Query(..., description="Minimum latitude"), max_lat: float = Query(..., description="Maximum latitude"), min_lon: float = Query(..., description="Minimum longitude"), max_lon: float = Query(..., description="Maximum longitude")) -> List[Dict[str, Any]]:
-    stops_data = get_stops_by_area(min_lat, max_lat, min_lon, max_lon)
-    return stops_data
 
 @router.get("/{stop_id}")
 def get_stop(stop_id: str = Path(..., description="The ID of the stop to retrieve")) -> Dict[str, Any]:

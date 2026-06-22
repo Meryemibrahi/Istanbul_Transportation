@@ -22,7 +22,7 @@ from RQuery_Explorer import (
     astar_geometry_by_stops
 )
 
-router = APIRouter(tags=["Network Analysis"])
+router = APIRouter()
 
 # ============================================================================
 # PATHFINDING ALGORITHMS

@@ -16,7 +16,7 @@ from RQuery_table_creation import (
     create_transit_edges
 )
 
-from Query_indexes_extenctions import (
+from RQuery_indexes import (
     create_gtfs_indexes,
     enable_postgres_extensions
 )
