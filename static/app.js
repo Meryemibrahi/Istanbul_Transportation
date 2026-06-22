@@ -53,6 +53,7 @@ function initMap() {
     layers.results = L.layerGroup().addTo(map);
     layers.paths = L.layerGroup().addTo(map);
     layers.network = L.layerGroup().addTo(map);
+    layers.metroRoutes = L.layerGroup().addTo(map);  // Persistent metro routes layer
 }
 
 function clearMap() {
@@ -60,6 +61,7 @@ function clearMap() {
     layers.results.clearLayers();
     layers.paths.clearLayers();
     layers.network.clearLayers();
+    layers.metroRoutes.clearLayers();  // Also clear persistent metro routes
     clearAllInteractiveModes();
     setResult("Map cleared.");
 }
@@ -591,6 +593,75 @@ async function showBusiestStops() {
 }
 
 // ==================== ROUTING ====================
+async function displayAllMetroRoutes() {
+    if (!metroRouteDetailsCache.length) {
+        return setResult("Metro routes not loaded yet. Please wait...");
+    }
+
+    showSpinner(true);
+    try {
+        layers.metroRoutes.clearLayers();
+
+        let routesDrawn = 0;
+
+        metroRouteDetailsCache.forEach((routeData, idx) => {
+            try {
+                const stops = routeData.stops || [];
+                if (stops.length < 2) return;
+
+                // Draw line connecting stops
+                const latlngs = stops.map(s => [s.stop_lat, s.stop_lon]);
+                const color = '#808080';  // Grey for all routes
+
+                L.polyline(latlngs, {
+                    color: color,
+                    weight: 3,
+                    opacity: 0.7,
+                    dashArray: '0'
+                })
+                    .bindPopup(`<b>${routeData.route.route_short_name}</b><br>${routeData.route.route_long_name || 'Metro Route'}`, { maxHeight: 100 })
+                    .addTo(layers.metroRoutes);
+
+                // Draw small markers at stops
+                stops.forEach((stop, i) => {
+                    L.circleMarker([stop.stop_lat, stop.stop_lon], {
+                        radius: 3,
+                        color: color,
+                        weight: 1,
+                        fillOpacity: 0.6,
+                        opacity: 0.8
+                    })
+                        .bindPopup(`${stop.stop_name} (${stop.stop_id})`)
+                        .addTo(layers.metroRoutes);
+                });
+
+                routesDrawn++;
+            } catch (e) {
+                console.error("Error drawing route:", routeData.route.route_id, e);
+            }
+        });
+
+        // Fit map to bounds
+        const allStops = [];
+        metroRouteDetailsCache.forEach(rd => {
+            (rd.stops || []).forEach(s => allStops.push([s.stop_lat, s.stop_lon]));
+        });
+        if (allStops.length > 0) {
+            const bounds = L.latLngBounds(allStops);
+            if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        setResult(`<h4>✓ All Metro Routes Displayed</h4>
+            <b>${routesDrawn}</b> routes on map<br>
+            Different colors for each route<br>
+            <i>Routes persist until Clear Map is pressed</i>`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
 async function loadMetroStations() {
     showSpinner(true);
     try {
@@ -633,67 +704,7 @@ async function loadMetroStations() {
             });
         }
 
-        // Populate station dropdowns with ALL metro stops from all routes
-        const startSelect = document.getElementById("metroStartSelect");
-        const endSelect = document.getElementById("metroEndSelect");
-        const tspStartSelect = document.getElementById("tspStartSelect");
-        const tspStopSelect = document.getElementById("tspStopSelect");
-
-        if (startSelect) startSelect.innerHTML = `<option value="">Choose start station...</option>`;
-        if (endSelect) endSelect.innerHTML = `<option value="">Choose end station...</option>`;
-        if (tspStartSelect) tspStartSelect.innerHTML = `<option value="">Choose start station...</option>`;
-        if (tspStopSelect) tspStopSelect.innerHTML = `<option value="">Choose stop...</option>`;
-
-        // Collect unique stops from all metro routes
-        const uniqueStops = new Map();
-        metroRouteDetailsCache.forEach(routeData => {
-            (routeData.stops || []).forEach(stop => {
-                const key = String(stop.stop_id);
-                if (!uniqueStops.has(key)) {
-                    uniqueStops.set(key, stop);
-                }
-            });
-        });
-
-        // Sort stops by name
-        const sortedStops = Array.from(uniqueStops.values()).sort((a, b) =>
-            String(a.stop_name).localeCompare(String(b.stop_name))
-        );
-
-        // Add all stops to dropdowns
-        sortedStops.forEach(stop => {
-            const label = `${stop.stop_name} (${stop.stop_id})`;
-
-            if (startSelect) {
-                const opt = document.createElement("option");
-                opt.value = stop.stop_id;
-                opt.textContent = label;
-                startSelect.appendChild(opt);
-            }
-
-            if (endSelect) {
-                const opt = document.createElement("option");
-                opt.value = stop.stop_id;
-                opt.textContent = label;
-                endSelect.appendChild(opt);
-            }
-
-            if (tspStartSelect) {
-                const opt = document.createElement("option");
-                opt.value = stop.stop_id;
-                opt.textContent = label;
-                tspStartSelect.appendChild(opt);
-            }
-
-            if (tspStopSelect) {
-                const opt = document.createElement("option");
-                opt.value = stop.stop_id;
-                opt.textContent = label;
-                tspStopSelect.appendChild(opt);
-            }
-        });
-
-        setResult(`Loaded ${metroRouteDetailsCache.length} metro routes with ${sortedStops.length} unique stations.`);
+        setResult(`Loaded ${metroRouteDetailsCache.length} metro routes.`);
     } catch (err) {
         setResult(`Error: ${err.message}`);
     } finally {
@@ -807,9 +818,6 @@ async function enrichPathStopsWithCoordinates(stops) {
 // Store current paths for comparison
 let currentBasePath = null;
 let currentComparePaths = [];
-
-// TSP variables
-let tspSelectedStops = [];
 
 async function showBaseRoute() {
     const { start, end } = getPathInputValues();
@@ -1070,10 +1078,6 @@ async function runTSP() {
         return setResult("Add at least one stop for TSP.");
     }
 
-    if (tspSelectedStops.length > 20) {
-        return setResult("Maximum 20 stops allowed for TSP.");
-    }
-
     showSpinner(true);
     try {
         const query = new URLSearchParams();
@@ -1082,27 +1086,20 @@ async function runTSP() {
 
         const data = await fetchJson(`${API_BASE_URL}/routes/tsp?${query.toString()}`);
 
-        let html = `<h4>✓ TSP Optimized Route</h4>
-            <p style="font-size: 0.9em; color: #666; margin: 0 0 12px 0;">${tspSelectedStops.length} stops selected</p>`;
+        let html = `<h4>TSP Optimized Order</h4>`;
 
         if (data.order && data.order.length) {
-            html += `<h5>Optimal Visit Order:</h5>`;
+            html += `<h5>Visit Order:</h5>`;
             data.order.forEach((item, i) => {
-                const stopData = data.stops?.find(s => String(s.vertex_id) === String(item.node));
-                const stopName = stopData ? stopData.stop_id : `Vertex ${item.node}`;
-                html += `<div style="padding: 8px; background: #f0f8f0; border-left: 3px solid #27ae60; margin: 4px 0; border-radius: 2px;">
-                    <b style="color: #27ae60;">${i + 1}.</b> ${escapeHtml(stopName)}
+                html += `<div style="padding: 4px; border-bottom: 1px solid #ddd;">
+                    ${i + 1}. Node ${item.node}
                 </div>`;
             });
         }
 
-        if (data.message) {
-            html += `<hr><p style="font-size: 0.85em; color: #666;">${data.message}</p>`;
-        }
-
         setResult(html);
     } catch (err) {
-        setResult(`<span style="color: #e74c3c;">Error: ${err.message}</span>`);
+        setResult(`Error: ${err.message}`);
     } finally {
         showSpinner(false);
     }

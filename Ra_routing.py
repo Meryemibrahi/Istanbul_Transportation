@@ -123,12 +123,9 @@ def get_tsp_route(start_id: str, stop_ids: list[str] = Query(...)):
         stops = get_tsp_selected_stops_query(vertex_ids)
         if not stops:
             raise HTTPException(status_code=404, detail="No stops found")
-
-        cost_matrix = get_tsp_cost_matrix_query(vertex_ids)
-        if not cost_matrix:
-            raise HTTPException(status_code=400, detail="Could not calculate cost matrix")
             
-        tsp_order = get_tsp_order_query(conn, cost_matrix, start_vertex_id) 
+        # Pass vertex_ids directly to tsp_order_query, not the cost_matrix result
+        tsp_order = get_tsp_order_query(conn, vertex_ids, start_vertex_id) 
         
         return {
             "stops": stops,

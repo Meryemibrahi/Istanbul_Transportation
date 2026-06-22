@@ -125,27 +125,39 @@ def get_tsp_cost_matrix_query(vertex_ids):
     return execute_query(query, [vertex_ids])
 
 
-def get_tsp_order_query(conn, cost_matrix, start_id):
-
+def get_tsp_order_query(conn, vertex_ids, start_id):
+    """
+    Solve TSP using pgr_TSP function.
+    
+    Args:
+        conn: Database connection
+        vertex_ids: List of vertex IDs to visit
+        start_id: Starting vertex ID
+    """
     try:
-        conn = connect_Database()
         cur = conn.cursor()
-        cur.execute("""
+        
+        # Convert vertex_ids list to PostgreSQL array format
+        vertex_array = '{' + ','.join(str(v) for v in vertex_ids) + '}'
+        
+        # Create cost matrix from vertex_ids
+        cur.execute(f"""
             CREATE TEMP TABLE tsp_matrix AS
             SELECT * FROM pgr_dijkstraCostMatrix(
                  'SELECT id, source, target, cost, cost AS reverse_cost FROM transit_edges',
-                  %s,
+                  ARRAY{vertex_array}::integer[],
                    directed := false
              );
-        """, [cost_matrix])
+        """)
 
+        # Solve TSP
         cur.execute("""
             SELECT *
             FROM pgr_TSP(
                 $$ SELECT * FROM tsp_matrix $$,
                 start_id := %s
                 );
-            """, [start_id])
+            """, (start_id,))
 
         results = cur.fetchall()
 
