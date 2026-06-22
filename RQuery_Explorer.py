@@ -1,6 +1,7 @@
 '''
 Done!
 '''
+from http.client import HTTPException
 from typing import Optional, List, Dict, Any
 from database_Creation import execute_query
 
@@ -78,3 +79,76 @@ def get_all_routes() -> List[Dict[str, Any]]:
     ORDER BY r.route_short_name
     """
     return execute_query(query)
+
+
+def get_route_with_stops(route_id: str) -> Dict[str, Any]:
+    """Get a specific route and all its stops in order"""
+
+    route_query = """
+        SELECT 
+            r.route_id,
+            r.route_short_name,
+            r.route_long_name,
+            r.route_type,
+            r.route_color,
+            COUNT(DISTINCT t.trip_id) AS trip_count
+        FROM routes r
+        LEFT JOIN trips t ON r.route_id = t.route_id
+        WHERE r.route_id = %s
+        GROUP BY 
+            r.route_id,
+            r.route_short_name,
+            r.route_long_name,
+            r.route_type,
+            r.route_color
+    """
+
+    route_data = execute_query(route_query, (route_id,))
+
+    if not route_data:
+        return {"error": f"Route {route_id} not found"}
+
+    route = route_data[0]
+
+    trip_query = """
+        SELECT 
+            t.trip_id
+        FROM trips t
+        JOIN stop_times st ON st.trip_id = t.trip_id
+        WHERE t.route_id = %s
+        GROUP BY t.trip_id
+        ORDER BY COUNT(st.stop_id) DESC
+        LIMIT 1
+    """
+
+    trip_data = execute_query(trip_query, (route_id,))
+
+    if not trip_data:
+        return {"error": f"No trips found for route {route_id}"}
+
+    trip_id = trip_data[0]["trip_id"]
+
+    stops_query = """
+        SELECT
+            s.stop_id,
+            s.stop_code,
+            s.stop_name,
+            s.stop_lat,
+            s.stop_lon,
+            st.stop_sequence
+        FROM stop_times st
+        JOIN stops s ON s.stop_id = st.stop_id
+        WHERE st.trip_id = %s
+        ORDER BY st.stop_sequence
+    """
+
+    stops = execute_query(stops_query, (trip_id,))
+
+    if not stops:
+        return {"error": f"No stops found for route {route_id}"}
+
+    return {
+        "route": route,
+        "stop_count": len(stops),
+        "stops": stops
+    }

@@ -148,7 +148,7 @@ function switchTab(tabName) {
 async function loadAllStopsForSearch() {
     if (allStopsCache.length > 0) return allStopsCache;
 
-    const res = await fetch(`${API_BASE_URL}/stops`);
+    const res = await fetch(`${API_BASE_URL}/explorer`);
     if (!res.ok) throw new Error('Failed to load stops for search');
 
     allStopsCache = await res.json();
@@ -220,7 +220,7 @@ function zoomToStop(stopId, stopName, lat, lon) {
 
 async function populateRouteDropdown() {
     try {
-        const res = await fetch(`${API_BASE_URL}/gtfs/routes`);
+        const res = await fetch(`${API_BASE_URL}/explorer/routes`);
         if (!res.ok) throw new Error('Failed to load routes');
 
         const raw = await res.json();
@@ -295,7 +295,7 @@ function enablePickEndMode() {
 async function pickNearestStopForPath(lat, lon, type) {
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops/nearest?lat=${lat}&lon=${lon}&radius=500`);
+        const res = await fetch(`${API_BASE_URL}/spail-tools/nearest?lat=${lat}&lon=${lon}&radius=500`);
         if (!res.ok) throw new Error('Failed to find nearby stops');
 
         const stops = await res.json();
@@ -402,7 +402,7 @@ async function getStopById() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops/${encodeURIComponent(stopId)}`);
+        const res = await fetch(`${API_BASE_URL}/explorer/${encodeURIComponent(stopId)}`);
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Stop not found');
@@ -434,43 +434,37 @@ async function getStopByCode() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops/by-code/${encodeURIComponent(code)}`);
+        const res = await fetch(`${API_BASE_URL}/advanced/${encodeURIComponent(code)}`);
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Stop code not found');
         }
 
-        const stops = await res.json();
+        const stop = await res.json();
 
         layers.results.clearLayers();
         
-        if (!stops || stops.length === 0) {
-            setResult('No stops found with that code');
+        if (!stop) {
+            setResult('No stop found with that code');
             return;
         }
 
-        let html = `<h4>Found ${stops.length} stop(s)</h4>`;
+        L.circleMarker([stop.stop_lat, stop.stop_lon], {
+            radius: 6,
+            color: '#3498db',
+            weight: 2,
+            fillOpacity: 0.7
+        }).bindPopup(`${stop.stop_name}<br>Code: ${stop.stop_code}<br>ID: ${stop.stop_id}`).addTo(layers.results);
 
-        stops.forEach(stop => {
-            L.circleMarker([stop.stop_lat, stop.stop_lon], {
-                radius: 6,
-                color: '#3498db',
-                weight: 2,
-                fillOpacity: 0.7
-            }).bindPopup(`${stop.stop_name}<br>Code: ${stop.stop_code}<br>ID: ${stop.stop_id}`).addTo(layers.results);
-
-            html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+        const html = `<h4>Found Stop</h4>
+            <div style="padding: 5px; border-bottom: 1px solid #ddd;">
                 <b>${stop.stop_name}</b><br>
                 Code: <b>${stop.stop_code}</b> | ID: ${stop.stop_id}<br>
                 Coords: ${stop.stop_lat.toFixed(4)}, ${stop.stop_lon.toFixed(4)}
             </div>`;
-        });
 
         setResult(html);
-        if (stops.length > 0) {
-            const bounds = L.latLngBounds(stops.map(s => [s.stop_lat, s.stop_lon]));
-            map.fitBounds(bounds);
-        }
+        map.setView([stop.stop_lat, stop.stop_lon], 14);
     } catch (err) {
         setResult(`Error: ${err.message}`);
     } finally {
@@ -481,7 +475,7 @@ async function getStopByCode() {
 async function loadAllStops() {
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops`);
+        const res = await fetch(`${API_BASE_URL}/explorer`);
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Failed to load stops');
@@ -517,6 +511,7 @@ async function loadAllStops() {
         showSpinner(false);
     }
 }
+
 async function findNearestStops() {
     const lat = document.getElementById('nearLat')?.value;
     const lon = document.getElementById('nearLon')?.value;
@@ -527,7 +522,7 @@ async function findNearestStops() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops/nearest?lat=${lat}&lon=${lon}&radius=${radius}&k=${k}`);
+        const res = await fetch(`${API_BASE_URL}/spail-tools/nearest?lat=${lat}&lon=${lon}&radius=${radius}`);
         if (!res.ok) throw new Error('No stops found');
 
         const stops = await res.json();
@@ -592,7 +587,7 @@ async function completeAreaSelection(endPoint) {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`);
+        const res = await fetch(`${API_BASE_URL}/spail-tools/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`);
         if (!res.ok) throw new Error('No stops found');
 
         const stops = await res.json();
@@ -631,7 +626,7 @@ async function useCurrentMapWindow() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/stops/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`);
+        const res = await fetch(`${API_BASE_URL}/spail-tools/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`);
         if (!res.ok) throw new Error('No stops found in current map window');
 
         const stops = await res.json();
@@ -663,35 +658,66 @@ async function useCurrentMapWindow() {
 
 // ==================== ROUTES FUNCTIONS ====================
 async function loadTopRoutes() {
-    const limit = document.getElementById('topRoutesLimit')?.value?.trim() || 10;
-    
-    if (isNaN(limit) || limit < 1) {
+    const limit =
+        document.getElementById('topRoutesLimit')?.value?.trim() || 10;
+
+    if (isNaN(limit) || Number(limit) < 1) {
         return setResult('Enter a valid number for route limit');
     }
 
     showSpinner(true);
+
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/top-routes?limit=${encodeURIComponent(limit)}`);
+        const res = await fetch(
+            `${API_BASE_URL}/advanced/top-routes?limit=${encodeURIComponent(limit)}`
+        );
+
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Failed to load routes');
         }
 
         const data = await res.json();
-        if (!data.top_routes || data.top_routes.length === 0) {
+
+        if (!data || data.length === 0) {
             return setResult('No routes found');
         }
 
-        let html = `<h4>Top ${limit} Routes by Trips</h4>
-            <p style="color: #666; margin-bottom: 10px;">Click a route to view all stops</p>`;
-        
-        data.top_routes.forEach((route, idx) => {
-            html += `<div style="padding: 8px; background: #ecf0f1; margin: 5px 0; border-radius: 4px; cursor: pointer; transition: all 0.2s;" 
-                         onmouseover="this.style.background='#d5dbdb'" onmouseout="this.style.background='#ecf0f1'"
-                         onclick="showRouteWithStops('${String(route.route_id).replace(/'/g, "\\'")}')">
-                <b>${idx + 1}. ${route.route_short_name}</b> - ${route.route_long_name || 'N/A'}<br>
-                <small style="color: #555;">${route.stop_count} stops | ${route.trip_count} trips</small>
-            </div>`;
+        let html = `
+            <h4>Top ${limit} Routes by Trips</h4>
+            <p style="color: #666; margin-bottom: 10px;">
+                Click a route to view all stops
+            </p>
+        `;
+
+        data.forEach((route, idx) => {
+            const safeRouteId = String(route.route_id).replace(/'/g, "\\'");
+
+            html += `
+                <div
+                    style="
+                        padding: 8px;
+                        background: #ecf0f1;
+                        margin: 5px 0;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    "
+                    onmouseover="this.style.background='#d5dbdb'"
+                    onmouseout="this.style.background='#ecf0f1'"
+                    onclick="showRouteWithStops('${safeRouteId}')"
+                >
+                    <b>
+                        ${idx + 1}. ${route.route_short_name || route.route_id}
+                    </b>
+                    - ${route.route_long_name || 'N/A'}<br>
+
+                    <small style="color: #555;">
+                        ${route.stop_count} stops |
+                        ${route.trip_count} trips
+                    </small>
+                </div>
+            `;
         });
 
         setResult(html);
@@ -708,7 +734,7 @@ async function showRouteWithStops(routeId = null) {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/route/${encodeURIComponent(id)}`);
+        const res = await fetch(`${API_BASE_URL}/explorer/route/${encodeURIComponent(id)}`);
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Route not found');
@@ -774,18 +800,18 @@ async function runDijkstra() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/dijkstra?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+        const res = await fetch(`${API_BASE_URL}/routes/dijkstra?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`);
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Path not found');
         }
 
         const data = await res.json();
-        if (!data.path || data.path.length === 0) throw new Error('No path found between stops');
+        if (!data.stops || data.stops.length === 0) throw new Error('No path found between stops');
 
         const pathData = {
             algorithm: data.algorithm || 'Dijkstra',
-            path: (data.path || []).map(stop => ({
+            path: data.stops.map(stop => ({
                 stop_id: stop.stop_id,
                 stop_name: stop.stop_name,
                 lat: stop.stop_lat,
@@ -793,7 +819,7 @@ async function runDijkstra() {
                 distance_from_start: stop.distance_from_start ?? 0
             })),
             total_distance: data.total_distance ?? 0,
-            hops: data.hops ?? (data.path || []).length
+            hops: data.hops ?? data.stops.length
         };
 
         drawPath(pathData, 'Dijkstra', '#3498db');
@@ -811,18 +837,18 @@ async function runAStar() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/astar?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+        const res = await fetch(`${API_BASE_URL}/routes/astar?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`);
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
             throw new Error(error.detail || 'Path not found');
         }
 
         const data = await res.json();
-        if (!data.path || data.path.length === 0) throw new Error('No path found between stops');
+        if (!data.stops || data.stops.length === 0) throw new Error('No path found between stops');
 
         const pathData = {
             algorithm: data.algorithm || 'A*',
-            path: (data.path || []).map(stop => ({
+            path: data.stops.map(stop => ({
                 stop_id: stop.stop_id,
                 stop_name: stop.stop_name,
                 lat: stop.stop_lat,
@@ -830,7 +856,7 @@ async function runAStar() {
                 distance_from_start: stop.distance_from_start ?? 0
             })),
             total_distance: data.total_distance ?? 0,
-            hops: data.hops ?? (data.path || []).length
+            hops: data.hops ?? data.stops.length
         };
 
         drawPath(pathData, 'A*', '#e74c3c');
@@ -885,7 +911,7 @@ function displayPathInfo(path) {
 
 // ==================== NETWORK FUNCTIONS ====================
 function displayFullNetwork() {
-    loadAllStops();
+    loadMetroNetwork();
 }
 
 // ==================== ANALYSIS FUNCTIONS ====================
@@ -895,16 +921,30 @@ async function showBusiestStops() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/busiest-stops?start_hour=${startHour}&end_hour=${endHour}`);
-        if (!res.ok) throw new Error('Analysis failed');
+        const res = await fetch(`${API_BASE_URL}/spail-tools/busy?start_time=${startHour}&end_time=${endHour}`);
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.detail || 'Analysis failed');
+        }
 
         const data = await res.json();
 
+        const busiestStops = Array.isArray(data)
+            ? data
+            : data.busiest_stops || [];
+
+        const timeRange = data.time_range || `${startHour}:00 - ${endHour}:00`;
+
         layers.results.clearLayers();
 
-        let html = `<h4>Busiest Stops: ${data.time_range}</h4>`;
+        if (busiestStops.length === 0) {
+            setResult('No busy stops found for this time range.');
+            return;
+        }
 
-        data.busiest_stops.forEach((stop, i) => {
+        let html = `<h4>Busiest Stops: ${timeRange}</h4>`;
+
+        busiestStops.forEach((stop, i) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
                 radius: Math.max(5, Math.min(12, stop.total_visits / 10)),
                 color: '#e74c3c',
@@ -920,9 +960,12 @@ async function showBusiestStops() {
 
         setResult(html);
 
-        if (data.busiest_stops.length > 0) {
-            const bounds = L.latLngBounds(data.busiest_stops.map(s => [s.stop_lat, s.stop_lon]));
-            if (bounds.isValid()) map.fitBounds(bounds);
+        const bounds = L.latLngBounds(
+            busiestStops.map(stop => [stop.stop_lat, stop.stop_lon])
+        );
+
+        if (bounds.isValid()) {
+            map.fitBounds(bounds);
         }
     } catch (err) {
         setResult(`Error: ${err.message}`);
@@ -1217,7 +1260,7 @@ async function loadMetroStations() {
 
 async function loadMetroNetwork() {
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/metro-network`);
+        const res = await fetch(`${API_BASE_URL}/explorer/network`);
         if (!res.ok) throw new Error('Failed to load metro network');
 
         const data = await res.json();
@@ -1243,6 +1286,7 @@ async function loadMetroNetwork() {
         setResult(`Error loading metro network: ${err.message}`);
     }
 }
+
 function syncMetroDropdownsToPathInputs() {
     const start = document.getElementById('metroStartSelect')?.value || '';
     const end = document.getElementById('metroEndSelect')?.value || '';

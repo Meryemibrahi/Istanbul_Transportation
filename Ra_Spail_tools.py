@@ -25,6 +25,6 @@ def get_nearest_stops(lat: float = Query(..., description="Latitude"), lon: floa
     return stops_data
 
 @router.get("/busy")
-def get_busy_stops(start_time: str = Query(..., description="Start time"), end_time: str = Query(..., description="End time")) -> List[Dict[str, Any]]:
+def return_busy_stops(start_time: str = Query(..., description="Start time"), end_time: str = Query(..., description="End time")) -> List[Dict[str, Any]]:
     busy_stops_data = get_busy_stops(start_time, end_time)
     return busy_stops_data
