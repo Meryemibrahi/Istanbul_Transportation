@@ -1,40 +1,49 @@
 // ==================== API CONFIGURATION ====================
-const API_BASE_URL = window.location.origin;
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 // ==================== MAP INITIALIZATION ====================
 let map;
 let layers = { stops: null, results: null, paths: null, network: null };
-let currentPathLayers = [];
 let isDrawingArea = false;
 let areaStartPoint = null;
-
 let nearestStopMode = false;
-let pickStartMode = false;
-let pickEndMode = false;
-
-let selectedStartStop = null;
-let selectedEndStop = null;
 
 let allStopsCache = [];
 let allRoutesCache = [];
+let metroStationsCache = [];
+let metroRouteDetailsCache = [];
 
 const DEFAULT_CENTER = [41.01, 28.97];
 const DEFAULT_ZOOM = 11;
 
-function initMap() {
-    map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+// ==================== STARTUP ====================
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", function () {
+            switchTab(this.getAttribute("data-tab"));
+        });
+    });
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    initMap();
+    populateRouteDropdown();
+    loadMetroStations();
+});
+
+// ==================== MAP ====================
+function initMap() {
+    map = L.map("map").setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
-    map.on('click', onMapClick);
+    map.on("click", onMapClick);
 
-    map.on('mousemove', e => {
+    map.on("mousemove", (e) => {
         const lat = e.latlng.lat.toFixed(4);
         const lon = e.latlng.lng.toFixed(4);
-        document.getElementById('coordDisplay').textContent = `Lat: ${lat}, Lon: ${lon}`;
+        document.getElementById("coordDisplay").textContent = `Lat: ${lat}, Lon: ${lon}`;
     });
 
     layers.stops = L.layerGroup().addTo(map);
@@ -43,32 +52,17 @@ function initMap() {
     layers.network = L.layerGroup().addTo(map);
 }
 
-// ==================== UTILITY FUNCTIONS ====================
-function showSpinner(show = true) {
-    document.getElementById('loadingSpinner').style.display = show ? 'flex' : 'none';
-}
-
-function setResult(html) {
-    document.getElementById('resultBox').innerHTML = html;
-}
-
-function clearResults() {
-    document.getElementById('resultBox').innerHTML = 'Ready';
-}
-
 function clearMap() {
     layers.stops.clearLayers();
     layers.results.clearLayers();
     layers.paths.clearLayers();
     layers.network.clearLayers();
-    clearResults();
     clearAllInteractiveModes();
+    setResult("Map cleared.");
 }
 
 function clearAllInteractiveModes() {
     nearestStopMode = false;
-    pickStartMode = false;
-    pickEndMode = false;
     isDrawingArea = false;
     areaStartPoint = null;
 }
@@ -77,7 +71,7 @@ function onMapClick(e) {
     if (isDrawingArea) {
         if (!areaStartPoint) {
             areaStartPoint = e.latlng;
-            setResult('Click to complete area selection...');
+            setResult("Click the second corner to complete the window query.");
         } else {
             completeAreaSelection(e.latlng);
         }
@@ -85,117 +79,120 @@ function onMapClick(e) {
     }
 
     if (nearestStopMode) {
-        document.getElementById('nearLat').value = e.latlng.lat.toFixed(6);
-        document.getElementById('nearLon').value = e.latlng.lng.toFixed(6);
+        document.getElementById("nearLat").value = e.latlng.lat.toFixed(6);
+        document.getElementById("nearLon").value = e.latlng.lng.toFixed(6);
         nearestStopMode = false;
         findNearestStops();
-        return;
-    }
-
-    if (pickStartMode) {
-        pickStartMode = false;
-        pickNearestStopForPath(e.latlng.lat, e.latlng.lng, 'start');
-        return;
-    }
-
-    if (pickEndMode) {
-        pickEndMode = false;
-        pickNearestStopForPath(e.latlng.lat, e.latlng.lng, 'end');
-        return;
     }
 }
 
-function getPathInputValues() {
-    const rawStart = document.getElementById('pathStart')?.value?.trim() || '';
-    const rawEnd = document.getElementById('pathEnd')?.value?.trim() || '';
-
-    const start = rawStart || (selectedStartStop ? selectedStartStop.stop_id : '');
-    const end = rawEnd || (selectedEndStop ? selectedEndStop.stop_id : '');
-
-    return { start, end };
+// ==================== UTILITY ====================
+function showSpinner(show = true) {
+    const spinner = document.getElementById("loadingSpinner");
+    if (spinner) spinner.style.display = show ? "flex" : "none";
 }
 
-// ==================== TAB NAVIGATION ====================
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tabName = this.getAttribute('data-tab');
-            switchTab(tabName);
-        });
-    });
+function setResult(html) {
+    const box = document.getElementById("resultBox");
+    if (box) box.innerHTML = html;
+}
 
-    initMap();
-    loadMetroStations();
-    loadMetroNetwork();
-    updateSelectedStopBoxes();
-    populateRouteDropdown();
-});
+function clearResults() {
+    setResult("Ready");
+}
 
 function switchTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
+    document.querySelectorAll(".tab-content").forEach((tab) => {
+        tab.style.display = "none";
     });
 
-    const activeTab = document.getElementById(tabName + '-tab');
-    if (activeTab) activeTab.style.display = 'block';
+    const activeTab = document.getElementById(`${tabName}-tab`);
+    if (activeTab) activeTab.style.display = "block";
 
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
     const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
-    if (activeBtn) activeBtn.classList.add('active');
+    if (activeBtn) activeBtn.classList.add("active");
 }
 
-// ==================== FRIENDLY SEARCH / PICK HELPERS ====================
+async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Request failed: ${res.status}`);
+    }
+    return res.json();
+}
+
+function escapeHtml(str) {
+    return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+// ==================== DATA LOADERS ====================
 async function loadAllStopsForSearch() {
     if (allStopsCache.length > 0) return allStopsCache;
-
-    const res = await fetch(`${API_BASE_URL}/explorer`);
-    if (!res.ok) throw new Error('Failed to load stops for search');
-
-    allStopsCache = await res.json();
+    allStopsCache = await fetchJson(`${API_BASE_URL}/explorer`);
     return allStopsCache;
 }
 
+async function loadStopById(stopId) {
+    const cached = allStopsCache.find((s) => String(s.stop_id) === String(stopId));
+    if (cached) return cached;
+    return await fetchJson(`${API_BASE_URL}/explorer/${encodeURIComponent(stopId)}`);
+}
+
+async function loadAllRoutes() {
+    if (allRoutesCache.length > 0) return allRoutesCache;
+    allRoutesCache = await fetchJson(`${API_BASE_URL}/explorer/routes`);
+    return allRoutesCache;
+}
+
+// ==================== EXPLORE ====================
 async function searchStopsByName() {
-    const query = document.getElementById('stopNameSearch')?.value?.trim().toLowerCase();
-    if (!query) return setResult('Enter a stop name.');
+    const query = document.getElementById("stopNameSearch")?.value?.trim().toLowerCase();
+    if (!query) return setResult("Enter a stop name.");
 
     showSpinner(true);
     try {
         const stops = await loadAllStopsForSearch();
-
         const matches = stops
-            .filter(stop => stop.stop_name && stop.stop_name.toLowerCase().includes(query))
-            .slice(0, 15);
+            .filter((stop) => stop.stop_name && stop.stop_name.toLowerCase().includes(query))
+            .slice(0, 20);
 
         layers.results.clearLayers();
 
         if (!matches.length) {
-            setResult('No matching stops found.');
+            setResult("No matching stops found.");
             return;
         }
 
         let html = `<h4>Matching Stops</h4>`;
 
-        matches.forEach(stop => {
+        matches.forEach((stop) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
                 radius: 6,
-                color: '#2980b9',
+                color: "#9b59b6",
                 weight: 2,
-                fillOpacity: 0.8
-            }).bindPopup(`<b>${stop.stop_name}</b><br>ID: ${stop.stop_id}`).addTo(layers.results);
+                fillOpacity: 0.8,
+            })
+                .bindPopup(`<b>${escapeHtml(stop.stop_name)}</b><br>ID: ${escapeHtml(stop.stop_id)}`)
+                .addTo(layers.results);
 
             html += `
                 <div style="padding: 6px; border-bottom: 1px solid #ddd; cursor: pointer;"
                      onclick="zoomToStop('${String(stop.stop_id).replace(/'/g, "\\'")}', '${String(stop.stop_name).replace(/'/g, "\\'")}', ${stop.stop_lat}, ${stop.stop_lon})">
-                    <b>${stop.stop_name}</b><br>
-                    ID: ${stop.stop_id}
+                    <b>${escapeHtml(stop.stop_name)}</b><br>
+                    ID: ${escapeHtml(stop.stop_id)}
                 </div>
             `;
         });
 
         setResult(html);
-
-        const bounds = L.latLngBounds(matches.map(s => [s.stop_lat, s.stop_lon]));
+        const bounds = L.latLngBounds(matches.map((s) => [s.stop_lat, s.stop_lon]));
         if (bounds.isValid()) map.fitBounds(bounds);
     } catch (err) {
         setResult(`Error: ${err.message}`);
@@ -209,159 +206,89 @@ function zoomToStop(stopId, stopName, lat, lon) {
 
     L.circleMarker([lat, lon], {
         radius: 8,
-        color: '#e74c3c',
+        color: "#e74c3c",
         weight: 2,
-        fillOpacity: 0.9
-    }).bindPopup(`<b>${stopName}</b><br>ID: ${stopId}`).addTo(layers.results);
+        fillOpacity: 0.9,
+    })
+        .bindPopup(`<b>${escapeHtml(stopName)}</b><br>ID: ${escapeHtml(stopId)}`)
+        .addTo(layers.results);
 
     map.setView([lat, lon], 15);
-    setResult(`<b>${stopName}</b><br>ID: ${stopId}<br>Lat: ${lat}<br>Lon: ${lon}`);
+    setResult(`<b>${escapeHtml(stopName)}</b><br>ID: ${escapeHtml(stopId)}<br>Lat: ${lat}<br>Lon: ${lon}`);
 }
 
 async function populateRouteDropdown() {
     try {
-        const res = await fetch(`${API_BASE_URL}/explorer/routes`);
-        if (!res.ok) throw new Error('Failed to load routes');
-
-        const raw = await res.json();
-        const routes = Array.isArray(raw) ? raw : (raw.routes || raw.data || []);
-        allRoutesCache = routes;
-
-        const select = document.getElementById('routeSelect');
+        const routes = await loadAllRoutes();
+        const select = document.getElementById("routeSelect");
         if (!select) return;
 
         select.innerHTML = `<option value="">Choose a route...</option>`;
 
-        routes.forEach(route => {
-            const option = document.createElement('option');
+        routes.forEach((route) => {
+            const option = document.createElement("option");
             option.value = route.route_id;
-            option.textContent = `${route.route_short_name || route.route_id} - ${route.route_long_name || 'N/A'}`;
+            option.textContent = `${route.route_short_name || route.route_id} - ${route.route_long_name || "N/A"}`;
             select.appendChild(option);
         });
     } catch (err) {
-        console.error('Failed to populate route dropdown:', err);
+        console.error("Failed to populate route dropdown:", err);
     }
 }
 
 function showSelectedRouteFromDropdown() {
-    const routeId = document.getElementById('routeSelect')?.value;
-    if (!routeId) return setResult('Please choose a route first.');
+    const routeId = document.getElementById("routeSelect")?.value;
+    if (!routeId) return setResult("Please choose a route first.");
     showRouteWithStops(routeId);
 }
 
-function updateSelectedStopBoxes() {
-    const startBox = document.getElementById('selectedStartBox');
-    const endBox = document.getElementById('selectedEndBox');
+async function showRouteWithStops(routeId = null) {
+    const id = routeId || document.getElementById("routeId")?.value;
+    if (!id) return setResult("Enter a route ID");
 
-    if (startBox) {
-        startBox.innerHTML = selectedStartStop
-            ? `<b>Start:</b> ${selectedStartStop.stop_name}<br>ID: ${selectedStartStop.stop_id}`
-            : 'No start stop selected.';
-    }
-
-    if (endBox) {
-        endBox.innerHTML = selectedEndStop
-            ? `<b>End:</b> ${selectedEndStop.stop_name}<br>ID: ${selectedEndStop.stop_id}`
-            : 'No end stop selected.';
-    }
-}
-
-function syncSelectedStopsToRawInputs() {
-    const rawStart = document.getElementById('pathStart');
-    const rawEnd = document.getElementById('pathEnd');
-
-    if (rawStart) rawStart.value = selectedStartStop ? selectedStartStop.stop_id : '';
-    if (rawEnd) rawEnd.value = selectedEndStop ? selectedEndStop.stop_id : '';
-}
-
-function enableNearestStopMode() {
-    clearAllInteractiveModes();
-    nearestStopMode = true;
-    setResult('Click on the map to find nearest stops.');
-}
-
-function enablePickStartMode() {
-    clearAllInteractiveModes();
-    pickStartMode = true;
-    setResult('Click on the map to choose the START stop.');
-}
-
-function enablePickEndMode() {
-    clearAllInteractiveModes();
-    pickEndMode = true;
-    setResult('Click on the map to choose the END stop.');
-}
-
-async function pickNearestStopForPath(lat, lon, type) {
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/spail-tools/nearest?lat=${lat}&lon=${lon}&radius=500`);
-        if (!res.ok) throw new Error('Failed to find nearby stops');
-
-        const stops = await res.json();
-        if (!stops.length) throw new Error('No nearby stop found');
-
-        const stop = stops[0];
-
-        if (type === 'start') selectedStartStop = stop;
-        else selectedEndStop = stop;
-
-        updateSelectedStopBoxes();
-        syncSelectedStopsToRawInputs();
+        const data = await fetchJson(`${API_BASE_URL}/explorer/route/${encodeURIComponent(id)}`);
 
         layers.results.clearLayers();
-        L.circleMarker([stop.stop_lat, stop.stop_lon], {
-            radius: 8,
-            color: type === 'start' ? '#27ae60' : '#c0392b',
-            weight: 2,
-            fillOpacity: 0.9
-        }).bindPopup(`<b>${type.toUpperCase()}</b><br>${stop.stop_name}`).addTo(layers.results);
 
-        map.setView([stop.stop_lat, stop.stop_lon], 15);
-        setResult(`Selected ${type} stop: <b>${stop.stop_name}</b>`);
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
+        const latlngs = data.stops.map((s) => [s.stop_lat, s.stop_lon]);
 
-async function searchStartStop() {
-    await searchStopForPath('pathStartName', 'start');
-}
+        L.polyline(latlngs, {
+            color: "#e74c3c",
+            weight: 3,
+            opacity: 0.75,
+        }).addTo(layers.results);
 
-async function searchEndStop() {
-    await searchStopForPath('pathEndName', 'end');
-}
+        data.stops.forEach((stop, i) => {
+            L.circleMarker([stop.stop_lat, stop.stop_lon], {
+                radius: 6,
+                color: "#9b59b6",
+                weight: 2,
+                fillOpacity: 0.9,
+            })
+                .bindPopup(`${i + 1}. ${escapeHtml(stop.stop_name)}`)
+                .addTo(layers.results);
+        });
 
-async function searchStopForPath(inputId, type) {
-    const query = document.getElementById(inputId)?.value?.trim().toLowerCase();
-    if (!query) return setResult('Enter a stop name.');
+        let html = `<h4>Route: ${escapeHtml(data.route.route_short_name)}</h4>
+            <b>Name:</b> ${escapeHtml(data.route.route_long_name || "N/A")}<br>
+            <b>Stops:</b> ${data.stop_count}<br>
+            <b>Trips:</b> ${data.route.trip_count}<br>
+            <h5>Stops in Order:</h5>`;
 
-    showSpinner(true);
-    try {
-        const stops = await loadAllStopsForSearch();
-        const matches = stops
-            .filter(stop => stop.stop_name && stop.stop_name.toLowerCase().includes(query))
-            .slice(0, 10);
-
-        if (!matches.length) {
-            setResult('No matching stops found.');
-            return;
-        }
-
-        let html = `<h4>Select ${type} stop</h4>`;
-
-        matches.forEach(stop => {
-            html += `
-                <div style="padding: 6px; border-bottom: 1px solid #ddd; cursor: pointer;"
-                     onclick="chooseStopForPath('${type}', '${String(stop.stop_id).replace(/'/g, "\\'")}', '${String(stop.stop_name).replace(/'/g, "\\'")}', ${stop.stop_lat}, ${stop.stop_lon})">
-                    <b>${stop.stop_name}</b><br>ID: ${stop.stop_id}
-                </div>
-            `;
+        data.stops.forEach((stop, i) => {
+            html += `<div style="padding: 4px 0; border-bottom: 1px solid #ddd;">
+                ${i + 1}. <b>${escapeHtml(stop.stop_name)}</b> (${escapeHtml(stop.stop_id)})
+            </div>`;
         });
 
         setResult(html);
+
+        if (latlngs.length > 0) {
+            const bounds = L.latLngBounds(latlngs);
+            if (bounds.isValid()) map.fitBounds(bounds);
+        }
     } catch (err) {
         setResult(`Error: ${err.message}`);
     } finally {
@@ -369,178 +296,131 @@ async function searchStopForPath(inputId, type) {
     }
 }
 
-function chooseStopForPath(type, stopId, stopName, lat, lon) {
-    const stopObj = {
-        stop_id: stopId,
-        stop_name: stopName,
-        stop_lat: lat,
-        stop_lon: lon
-    };
-
-    if (type === 'start') selectedStartStop = stopObj;
-    else selectedEndStop = stopObj;
-
-    updateSelectedStopBoxes();
-    syncSelectedStopsToRawInputs();
-
-    layers.results.clearLayers();
-    L.circleMarker([lat, lon], {
-        radius: 8,
-        color: type === 'start' ? '#27ae60' : '#c0392b',
-        weight: 2,
-        fillOpacity: 0.9
-    }).bindPopup(`<b>${type.toUpperCase()}</b><br>${stopName}`).addTo(layers.results);
-
-    map.setView([lat, lon], 15);
-    setResult(`Selected ${type} stop: <b>${stopName}</b>`);
-}
-
-// ==================== STOPS FUNCTIONS ====================
-async function getStopById() {
-    const stopId = document.getElementById('stopId')?.value?.trim();
-    if (!stopId) return setResult('Enter a stop ID');
-
+async function displayFullNetwork() {
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/explorer/${encodeURIComponent(stopId)}`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Stop not found');
-        }
+        const res = await fetch(`${API_BASE_URL}/explorer/network`);
+        if (!res.ok) throw new Error('Network load failed');
 
-        const stop = await res.json();
+        const network = await res.json();
+        console.log("FULL NETWORK RESPONSE:", network);
 
-        layers.results.clearLayers();
-        L.circleMarker([stop.stop_lat, stop.stop_lon], {
-            radius: 8,
-            color: '#e74c3c',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).bindPopup(`<b>${stop.stop_name}</b><br>ID: ${stop.stop_id}<br>Code: ${stop.stop_code || 'N/A'}`).addTo(layers.results);
+        const routes = network.routes || network.routes_data || [];
+        const stops = network.stops || network.stops_data || [];
 
-        map.setView([stop.stop_lat, stop.stop_lon], 14);
-        setResult(`<b>${stop.stop_name}</b><br>ID: ${stop.stop_id}<br>Code: ${stop.stop_code || 'N/A'}<br>Lat: ${stop.stop_lat}<br>Lon: ${stop.stop_lon}`);
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
+        layers.network.clearLayers();
 
-async function getStopByCode() {
-    const code = document.getElementById('stopCode')?.value?.trim();
-    if (!code) return setResult('Enter a stop code');
+        let html = `<h4>Full Network Visualization</h4>
+            <b>Stops:</b> ${stops.length}<br>
+            <b>Routes:</b> ${routes.length}<br><hr>`;
 
-    showSpinner(true);
-    try {
-        const res = await fetch(`${API_BASE_URL}/advanced/${encodeURIComponent(code)}`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Stop code not found');
-        }
+        let routesDrawn = 0;
+        routes.forEach(route => {
+            if (!route.geojson) {
+                console.warn('No geojson for route:', route.route_id);
+                return;
+            }
 
-        const stop = await res.json();
+            try {
+                const geom = JSON.parse(route.geojson);
+                console.log("Route geojson:", route.route_id, geom);
 
-        layers.results.clearLayers();
-        
-        if (!stop) {
-            setResult('No stop found with that code');
-            return;
-        }
+                L.geoJSON(geom, {
+                    style: function(feature) {
+                        return {
+                            color: '#e74c3c',
+                            weight: 4,
+                            opacity: 0.8,
+                            lineCap: 'round',
+                            lineJoin: 'round'
+                        };
+                    },
+                    onEachFeature: function(feature, layer) {
+                        layer.bindPopup(`
+                            <b>${route.route_short_name || route.route_id}</b><br>
+                            ${route.route_long_name || ''}
+                        `);
+                    }
+                }).addTo(layers.network);
+                
+                routesDrawn++;
 
-        L.circleMarker([stop.stop_lat, stop.stop_lon], {
-            radius: 6,
-            color: '#3498db',
-            weight: 2,
-            fillOpacity: 0.7
-        }).bindPopup(`${stop.stop_name}<br>Code: ${stop.stop_code}<br>ID: ${stop.stop_id}`).addTo(layers.results);
+            } catch (e) {
+                console.error('Invalid route geojson:', route.route_id, e);
+            }
+        });
 
-        const html = `<h4>Found Stop</h4>
-            <div style="padding: 5px; border-bottom: 1px solid #ddd;">
-                <b>${stop.stop_name}</b><br>
-                Code: <b>${stop.stop_code}</b> | ID: ${stop.stop_id}<br>
-                Coords: ${stop.stop_lat.toFixed(4)}, ${stop.stop_lon.toFixed(4)}
-            </div>`;
-
-        setResult(html);
-        map.setView([stop.stop_lat, stop.stop_lon], 14);
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-async function loadAllStops() {
-    showSpinner(true);
-    try {
-        const res = await fetch(`${API_BASE_URL}/explorer`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Failed to load stops');
-        }
-
-        const stops = await res.json();
-        if (!stops || stops.length === 0) throw new Error('No stops found in database');
-
-        layers.stops.clearLayers();
         const mcg = L.markerClusterGroup();
 
         stops.forEach(stop => {
             const marker = L.circleMarker([stop.stop_lat, stop.stop_lon], {
-                radius: 8,
-                color: '#9b59b6',
+                radius: 3,
+                color: '#27ae60',
                 weight: 1,
-                fillOpacity: 0.7
-            }).bindPopup(`<b>${stop.stop_name}</b><br>ID: ${stop.stop_id}<br>Code: ${stop.stop_code || 'N/A'}`);
+                fillOpacity: 0.6,
+                opacity: 0.7
+            }).bindPopup(`${stop.stop_name}<br>ID: ${stop.stop_id}`);
+
             mcg.addLayer(marker);
         });
 
-        layers.stops.addLayer(mcg);
-        setResult(` Loaded ${stops.length} stops with clustering enabled. Zoom in to see individual stops.`);
-        
-        // Fit bounds to all stops
+        layers.network.addLayer(mcg);
+
+        html += `<b>Routes drawn:</b> ${routesDrawn}<br>
+                 <i>Red lines show route paths, green markers show stops with clustering.</i>`;
+        setResult(html);
+
+        // Fit map bounds to show entire network
         if (stops.length > 0) {
             const bounds = L.latLngBounds(stops.map(s => [s.stop_lat, s.stop_lon]));
-            map.fitBounds(bounds, { padding: [50, 50] });
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
         }
+
     } catch (err) {
-        setResult(` Error: ${err.message}`);
+        setResult(`Error: ${err.message}`);
     } finally {
         showSpinner(false);
     }
 }
 
-async function findNearestStops() {
-    const lat = document.getElementById('nearLat')?.value;
-    const lon = document.getElementById('nearLon')?.value;
-    const radius = document.getElementById('nearRadius')?.value || 500;
-    const k = parseInt(document.getElementById('nearLimit')?.value || 5);
+// ==================== SPATIAL TOOLS ====================
+function enableNearestStopMode() {
+    clearAllInteractiveModes();
+    nearestStopMode = true;
+    setResult("Click on the map to find nearest stops.");
+}
 
-    if (!lat || !lon) return setResult('Enter latitude and longitude');
+async function findNearestStops() {
+    const lat = document.getElementById("nearLat")?.value;
+    const lon = document.getElementById("nearLon")?.value;
+    const radius = document.getElementById("nearRadius")?.value || 500;
+    const kInput = document.getElementById("nearLimit")?.value?.trim();
+    const k = kInput ? parseInt(kInput, 10) : null;
+
+    if (!lat || !lon) return setResult("Enter latitude and longitude");
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/spail-tools/nearest?lat=${lat}&lon=${lon}&radius=${radius}`);
-        if (!res.ok) throw new Error('No stops found');
+        const stops = await fetchJson(
+            `${API_BASE_URL}/spail-tools/nearest?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`
+        );
 
-        const stops = await res.json();
-        const limitedStops = stops.slice(0, k);
-
+        const limitedStops = k ? stops.slice(0, k) : stops;
         layers.results.clearLayers();
 
-        L.circleMarker([lat, lon], {
-            radius: 8,
-            color: '#f39c12',
+        L.circleMarker([parseFloat(lat), parseFloat(lon)], {
+            radius: 5,
+            color: "#f39c12",
             weight: 2,
-            fillOpacity: 0.9
+            fillOpacity: 0.9,
         }).addTo(layers.results);
 
-        L.circle([lat, lon], {
-            radius: radius,
-            color: '#95a5a6',
-            fill: false
+        L.circle([parseFloat(lat), parseFloat(lon)], {
+            radius: parseFloat(radius),
+            color: "#e74c3c",
+            fill: false,
         }).addTo(layers.results);
 
         let html = `<h4>Nearest ${limitedStops.length} Stops</h4>`;
@@ -548,14 +428,16 @@ async function findNearestStops() {
         limitedStops.forEach((stop, i) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
                 radius: 8,
-                color: '#9b59b6',
-                weight: 1,
-                fillOpacity: 0.7
-            }).bindPopup(`${stop.stop_name}<br>Distance: ${Math.round(stop.distance_m)}m`).addTo(layers.results);
+                color: "#9b59b6",
+                weight: 2,
+                fillOpacity: 0.75,
+            })
+                .bindPopup(`${escapeHtml(stop.stop_name)}<br>Distance: ${Math.round(Number(stop.distance_m || 0))}m`)
+                .addTo(layers.results);
 
             html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
-                ${i + 1}. <b>${stop.stop_name}</b><br>
-                Distance: ${Math.round(stop.distance_m)}m
+                ${i + 1}. <b>${escapeHtml(stop.stop_name)}</b><br>
+                Distance: ${Math.round(Number(stop.distance_m || 0))} m
             </div>`;
         });
 
@@ -572,7 +454,7 @@ function enableAreaSelection() {
     clearAllInteractiveModes();
     isDrawingArea = true;
     areaStartPoint = null;
-    setResult('Click on map to start area selection...');
+    setResult("Click on the map to choose the first corner of the area.");
 }
 
 async function completeAreaSelection(endPoint) {
@@ -582,33 +464,36 @@ async function completeAreaSelection(endPoint) {
     const maxLat = Math.max(areaStartPoint.lat, endPoint.lat);
     const minLon = Math.min(areaStartPoint.lng, endPoint.lng);
     const maxLon = Math.max(areaStartPoint.lng, endPoint.lng);
-
     areaStartPoint = null;
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/spail-tools/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`);
-        if (!res.ok) throw new Error('No stops found');
-
-        const stops = await res.json();
+        const stops = await fetchJson(
+            `${API_BASE_URL}/spail-tools/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`
+        );
 
         layers.results.clearLayers();
-        L.rectangle([[minLat, minLon], [maxLat, maxLon]], {
-            color: '#3498db',
-            weight: 2,
-            fill: false
-        }).addTo(layers.results);
 
-        stops.forEach(stop => {
+        L.rectangle(
+            [
+                [minLat, minLon],
+                [maxLat, maxLon],
+            ],
+            { color: "#3498db", weight: 2, fill: false }
+        ).addTo(layers.results);
+
+        stops.forEach((stop) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
                 radius: 5,
-                color: '#9b59b6',
+                color: "#9b59b6",
                 weight: 1,
-                fillOpacity: 0.7
-            }).bindPopup(stop.stop_name).addTo(layers.results);
+                fillOpacity: 0.7,
+            })
+                .bindPopup(escapeHtml(stop.stop_name))
+                .addTo(layers.results);
         });
 
-        setResult(`Found ${stops.length} stops in area`);
+        setResult(`Found ${stops.length} stops in the selected area.`);
     } catch (err) {
         setResult(`Error: ${err.message}`);
     } finally {
@@ -618,7 +503,6 @@ async function completeAreaSelection(endPoint) {
 
 async function useCurrentMapWindow() {
     const bounds = map.getBounds();
-
     const minLat = bounds.getSouth();
     const maxLat = bounds.getNorth();
     const minLon = bounds.getWest();
@@ -626,26 +510,29 @@ async function useCurrentMapWindow() {
 
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/spail-tools/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`);
-        if (!res.ok) throw new Error('No stops found in current map window');
-
-        const stops = await res.json();
+        const stops = await fetchJson(
+            `${API_BASE_URL}/spail-tools/inarea?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`
+        );
 
         layers.results.clearLayers();
 
-        L.rectangle([[minLat, minLon], [maxLat, maxLon]], {
-            color: '#3498db',
-            weight: 2,
-            fill: false
-        }).addTo(layers.results);
+        L.rectangle(
+            [
+                [minLat, minLon],
+                [maxLat, maxLon],
+            ],
+            { color: "#3498db", weight: 2, fill: false }
+        ).addTo(layers.results);
 
-        stops.forEach(stop => {
+        stops.forEach((stop) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
                 radius: 5,
-                color: '#9b59b6',
+                color: "#9b59b6",
                 weight: 1,
-                fillOpacity: 0.7
-            }).bindPopup(stop.stop_name).addTo(layers.results);
+                fillOpacity: 0.7,
+            })
+                .bindPopup(escapeHtml(stop.stop_name))
+                .addTo(layers.results);
         });
 
         setResult(`Found ${stops.length} stops in the current map window.`);
@@ -656,316 +543,42 @@ async function useCurrentMapWindow() {
     }
 }
 
-// ==================== ROUTES FUNCTIONS ====================
-async function loadTopRoutes() {
-    const limit =
-        document.getElementById('topRoutesLimit')?.value?.trim() || 10;
-
-    if (isNaN(limit) || Number(limit) < 1) {
-        return setResult('Enter a valid number for route limit');
-    }
+async function showBusiestStops() {
+    const startHour = document.getElementById("busyStart")?.value || 6;
+    const endHour = document.getElementById("busyEnd")?.value || 9;
 
     showSpinner(true);
-
     try {
-        const res = await fetch(
-            `${API_BASE_URL}/advanced/top-routes?limit=${encodeURIComponent(limit)}`
+        const data = await fetchJson(
+            `${API_BASE_URL}/spail-tools/busy?start_time=${encodeURIComponent(startHour)}&end_time=${encodeURIComponent(endHour)}`
         );
 
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Failed to load routes');
-        }
-
-        const data = await res.json();
-
-        if (!data || data.length === 0) {
-            return setResult('No routes found');
-        }
-
-        let html = `
-            <h4>Top ${limit} Routes by Trips</h4>
-            <p style="color: #666; margin-bottom: 10px;">
-                Click a route to view all stops
-            </p>
-        `;
-
-        data.forEach((route, idx) => {
-            const safeRouteId = String(route.route_id).replace(/'/g, "\\'");
-
-            html += `
-                <div
-                    style="
-                        padding: 8px;
-                        background: #ecf0f1;
-                        margin: 5px 0;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                    "
-                    onmouseover="this.style.background='#d5dbdb'"
-                    onmouseout="this.style.background='#ecf0f1'"
-                    onclick="showRouteWithStops('${safeRouteId}')"
-                >
-                    <b>
-                        ${idx + 1}. ${route.route_short_name || route.route_id}
-                    </b>
-                    - ${route.route_long_name || 'N/A'}<br>
-
-                    <small style="color: #555;">
-                        ${route.stop_count} stops |
-                        ${route.trip_count} trips
-                    </small>
-                </div>
-            `;
-        });
-
-        setResult(html);
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-async function showRouteWithStops(routeId = null) {
-    const id = routeId || document.getElementById('routeId')?.value?.trim();
-    if (!id) return setResult('Enter a route ID');
-
-    showSpinner(true);
-    try {
-        const res = await fetch(`${API_BASE_URL}/explorer/route/${encodeURIComponent(id)}`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Route not found');
-        }
-
-        const data = await res.json();
-        if (!data.stops || data.stops.length === 0) throw new Error('No stops found for this route');
-
         layers.results.clearLayers();
 
-        const latlngs = data.stops.map(s => [s.stop_lat, s.stop_lon]);
+        let html = `<h4>Busiest Stops</h4>
+            <b>Time range:</b> ${escapeHtml(startHour)}:00 - ${escapeHtml(endHour)}:00<br><hr>`;
 
-        L.polyline(latlngs, {
-            color: '#e74c3c',
-            weight: 3,
-            opacity: 0.7
-        }).addTo(layers.results);
-
-        data.stops.forEach((stop, i) => {
-            let markerColor = '#27ae60';
-            if (i === 0) markerColor = '#3498db';
-            else if (i === data.stops.length - 1) markerColor = '#e74c3c';
-            
+        data.forEach((stop, i) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
-                radius: 6,
-                color: markerColor,
-                weight: 2,
-                fillOpacity: 0.9
-            }).bindPopup(`<b>${i + 1}. ${stop.stop_name}</b><br>ID: ${stop.stop_id}`).addTo(layers.results);
-        });
-
-        let html = `<h4>Route: ${data.route.route_short_name}</h4>
-            <b>Name:</b> ${data.route.route_long_name || 'N/A'}<br>
-            <b>Stops:</b> ${data.stop_count}<br>
-            <b>Trips:</b> ${data.route.trip_count}<br>
-            <hr>
-            <h5>Stops in Order:</h5>`;
-
-        data.stops.forEach((stop, i) => {
-            html += `<div style="padding: 4px 0; border-bottom: 1px solid #ddd;">
-                <b>${i + 1}.</b> ${stop.stop_name} <br>
-                <span style="color: #666; font-size: 0.9em;">ID: ${stop.stop_id}</span>
-            </div>`;
-        });
-
-        setResult(html);
-
-        if (data.stops.length > 0) {
-            const bounds = L.latLngBounds(latlngs);
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-// ==================== PATHFINDING FUNCTIONS ====================
-async function runDijkstra() {
-    const { start, end } = getPathInputValues();
-    if (!start || !end) return setResult('Enter start and end stop IDs');
-
-    showSpinner(true);
-    try {
-        const res = await fetch(`${API_BASE_URL}/routes/dijkstra?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Path not found');
-        }
-
-        const data = await res.json();
-        if (!data.stops || data.stops.length === 0) throw new Error('No path found between stops');
-
-        const pathData = {
-            algorithm: data.algorithm || 'Dijkstra',
-            path: data.stops.map(stop => ({
-                stop_id: stop.stop_id,
-                stop_name: stop.stop_name,
-                lat: stop.stop_lat,
-                lon: stop.stop_lon,
-                distance_from_start: stop.distance_from_start ?? 0
-            })),
-            total_distance: data.total_distance ?? 0,
-            hops: data.hops ?? data.stops.length
-        };
-
-        drawPath(pathData, 'Dijkstra', '#3498db');
-        displayPathInfo(pathData);
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-async function runAStar() {
-    const { start, end } = getPathInputValues();
-    if (!start || !end) return setResult('Enter start and end stop IDs');
-
-    showSpinner(true);
-    try {
-        const res = await fetch(`${API_BASE_URL}/routes/astar?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Path not found');
-        }
-
-        const data = await res.json();
-        if (!data.stops || data.stops.length === 0) throw new Error('No path found between stops');
-
-        const pathData = {
-            algorithm: data.algorithm || 'A*',
-            path: data.stops.map(stop => ({
-                stop_id: stop.stop_id,
-                stop_name: stop.stop_name,
-                lat: stop.stop_lat,
-                lon: stop.stop_lon,
-                distance_from_start: stop.distance_from_start ?? 0
-            })),
-            total_distance: data.total_distance ?? 0,
-            hops: data.hops ?? data.stops.length
-        };
-
-        drawPath(pathData, 'A*', '#e74c3c');
-        displayPathInfo(pathData);
-    } catch (err) {
-        setResult(`Error: ${err.message}`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-function drawPath(path, algorithm, color) {
-    layers.paths.clearLayers();
-
-    const latlngs = path.path.map(p => [p.lat, p.lon]);
-    if (!latlngs.length) return;
-
-    L.polyline(latlngs, {
-        color: color,
-        weight: 3,
-        opacity: 0.8
-    }).addTo(layers.paths);
-
-    path.path.forEach((stop, i) => {
-        L.circleMarker([stop.lat, stop.lon], {
-            radius: 5,
-            color: color,
-            weight: 2,
-            fillOpacity: 0.8
-        }).bindPopup(`${i + 1}. ${stop.stop_name}`).addTo(layers.paths);
-    });
-
-    const bounds = L.latLngBounds(latlngs);
-    if (bounds.isValid()) map.fitBounds(bounds);
-}
-
-function displayPathInfo(path) {
-    let html = `<h4>${path.algorithm} Path</h4>
-        Total Distance: ${Math.round(path.total_distance)}m<br>
-        Hops: ${path.hops}<br>
-        <h5>Route:</h5>`;
-
-    path.path.forEach((stop, i) => {
-        html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
-            ${i + 1}. <b>${stop.stop_name}</b><br>
-            Distance from start: ${Math.round(stop.distance_from_start)}m
-        </div>`;
-    });
-
-    setResult(html);
-}
-
-// ==================== NETWORK FUNCTIONS ====================
-function displayFullNetwork() {
-    loadMetroNetwork();
-}
-
-// ==================== ANALYSIS FUNCTIONS ====================
-async function showBusiestStops() {
-    const startHour = document.getElementById('busyStart')?.value || 6;
-    const endHour = document.getElementById('busyEnd')?.value || 9;
-
-    showSpinner(true);
-    try {
-        const res = await fetch(`${API_BASE_URL}/spail-tools/busy?start_time=${startHour}&end_time=${endHour}`);
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Analysis failed');
-        }
-
-        const data = await res.json();
-
-        const busiestStops = Array.isArray(data)
-            ? data
-            : data.busiest_stops || [];
-
-        const timeRange = data.time_range || `${startHour}:00 - ${endHour}:00`;
-
-        layers.results.clearLayers();
-
-        if (busiestStops.length === 0) {
-            setResult('No busy stops found for this time range.');
-            return;
-        }
-
-        let html = `<h4>Busiest Stops: ${timeRange}</h4>`;
-
-        busiestStops.forEach((stop, i) => {
-            L.circleMarker([stop.stop_lat, stop.stop_lon], {
-                radius: Math.max(5, Math.min(12, stop.total_visits / 10)),
-                color: '#e74c3c',
+                radius: Math.max(5, Math.min(12, Number(stop.total_visits || 0) / 10)),
+                color: "#9b59b6",
                 weight: 1,
-                fillOpacity: 0.7
-            }).bindPopup(`${stop.stop_name}<br>Visits: ${stop.total_visits}`).addTo(layers.results);
+                fillOpacity: 0.75,
+            })
+                .bindPopup(`${escapeHtml(stop.stop_name)}<br>Visits: ${stop.total_visits}`)
+                .addTo(layers.results);
 
             html += `<div style="padding: 5px; background: #f39c12; color: white; border-radius: 3px; margin: 3px 0;">
-                ${i + 1}. <b>${stop.stop_name}</b><br>
+                ${i + 1}. <b>${escapeHtml(stop.stop_name)}</b><br>
                 Visits: ${stop.total_visits} | Routes: ${stop.unique_routes}
             </div>`;
         });
 
         setResult(html);
 
-        const bounds = L.latLngBounds(
-            busiestStops.map(stop => [stop.stop_lat, stop.stop_lon])
-        );
-
-        if (bounds.isValid()) {
-            map.fitBounds(bounds);
+        if (data.length > 0) {
+            const bounds = L.latLngBounds(data.map((s) => [s.stop_lat, s.stop_lon]));
+            if (bounds.isValid()) map.fitBounds(bounds);
         }
     } catch (err) {
         setResult(`Error: ${err.message}`);
@@ -974,262 +587,46 @@ async function showBusiestStops() {
     }
 }
 
-// ==================== MOBILITYDB FUNCTIONS ====================
-function setMobilityTimePreset(value) {
-    const input = document.getElementById('mobilityTime');
-    if (input) input.value = value;
-}
-
-function loadMobilityCurrentWindow() {
-    const bounds = map.getBounds();
-
-    document.getElementById('minLon').value = bounds.getWest().toFixed(6);
-    document.getElementById('minLat').value = bounds.getSouth().toFixed(6);
-    document.getElementById('maxLon').value = bounds.getEast().toFixed(6);
-    document.getElementById('maxLat').value = bounds.getNorth().toFixed(6);
-
-    loadMobilityWindow();
-}
-
-// Color palette for different vehicles
-const vehicleColors = {
-    'V101': '#e74c3c',   // Red
-    'V102': '#3498db',   // Blue
-    'V103': '#2ecc71',   // Green
-    'V104': '#f39c12',   // Orange
-    'V105': '#9b59b6'    // Purple
-};
-
-function getVehicleColor(vehicleId) {
-    return vehicleColors[vehicleId] || '#95a5a6'; // Default gray
-}
-
-async function loadMobilityTrajectories() {
-    showSpinner(true);
-    try {
-        layers.results.clearLayers();
-
-        const res = await fetch(`${API_BASE_URL}/mobility/trajectories`);
-        if (!res.ok) throw new Error('Failed to load trajectories');
-
-        const data = await res.json();
-        const vehicleStats = {};
-
-        const geoLayer = L.geoJSON(data, {
-            style: function(feature) {
-                const vehicleId = feature.properties?.vehicle_id || 'UNKNOWN';
-                if (!vehicleStats[vehicleId]) {
-                    vehicleStats[vehicleId] = { route: feature.properties?.route_id || 'N/A' };
-                }
-                return {
-                    color: getVehicleColor(vehicleId),
-                    weight: 5,
-                    opacity: 0.85,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                };
-            },
-            onEachFeature: function(feature, layer) {
-                const props = feature.properties || {};
-                const popup = `
-                    <div style="font-family: monospace; font-size: 12px;">
-                        <b style="color: ${getVehicleColor(props.vehicle_id)}">▓ ${props.vehicle_id}</b><br>
-                        <i>Route:</i> <b>${props.route_id || 'N/A'}</b><br>
-                        <i>Path points:</i> ${feature.geometry?.coordinates?.length || '?'}
-                    </div>
-                `;
-                layer.bindPopup(popup);
-            }
-        }).addTo(layers.results);
-
-        // Create legend
-        let legendHTML = '<h4 style="margin: 0 0 8px 0;">Vehicle Trajectories</h4>';
-        Object.entries(vehicleStats).forEach(([vid, info]) => {
-            legendHTML += `<div style="margin: 4px 0;"><span style="color: ${getVehicleColor(vid)}; font-weight: bold;">▓▓▓</span> ${vid} (${info.route})</div>`;
-        });
-
-        if (data.features && data.features.length > 0) {
-            const bounds = geoLayer.getBounds();
-            if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
-        }
-
-        setResult(`<h4>Full Vehicle Trajectories</h4>
-            <div style="font-size: 0.9rem;">
-                <p>Showing complete paths of <b>${Object.keys(vehicleStats).length} vehicle(s)</b></p>
-                ${legendHTML}
-                <p style="font-size: 0.85rem; color: #666; margin-top: 8px;"><i>Click paths for details</i></p>
-            </div>`);
-    } catch (err) {
-        setResult(`<span style="color: #e74c3c;">Error: ${err.message}</span>`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-async function loadMobilityAtTime() {
-    const timestamp = document.getElementById('mobilityTime')?.value;
-    if (!timestamp) return setResult('Enter a timestamp (e.g., 2026-05-25 08:05:00+03)');
-
-    showSpinner(true);
-    try {
-        layers.results.clearLayers();
-
-        const res = await fetch(`${API_BASE_URL}/mobility/at-time?timestamp=${encodeURIComponent(timestamp)}`);
-        if (!res.ok) throw new Error('Failed to load positions at time');
-
-        const data = await res.json();
-
-        const geoLayer = L.geoJSON(data, {
-            pointToLayer: function(feature, latlng) {
-                const vehicleId = feature.properties?.vehicle_id || 'UNKNOWN';
-                return L.circleMarker(latlng, {
-                    radius: 12,
-                    color: getVehicleColor(vehicleId),
-                    weight: 3,
-                    fillOpacity: 0.9,
-                    fillColor: getVehicleColor(vehicleId)
-                });
-            },
-            onEachFeature: function(feature, layer) {
-                const props = feature.properties || {};
-                const popup = `
-                    <div style="font-family: monospace; font-size: 12px;">
-                        <b style="color: ${getVehicleColor(props.vehicle_id)}">● ${props.vehicle_id}</b><br>
-                        <i>Route:</i> <b>${props.route_id || 'N/A'}</b><br>
-                        <i>Time:</i> ${timestamp.split('+')[0]}
-                    </div>
-                `;
-                layer.bindPopup(popup);
-                layer.openPopup();
-            }
-        }).addTo(layers.results);
-
-        if (data.features && data.features.length > 0) {
-            const bounds = geoLayer.getBounds();
-            if (bounds.isValid()) map.fitBounds(bounds, { padding: [80, 80] });
-        }
-
-        setResult(`<h4> Vehicle Positions at Time</h4>
-            <div style="font-size: 0.9rem;">
-                <p><b>Timestamp:</b> ${timestamp}</p>
-                <p><b>Vehicles found:</b> ${data.features ? data.features.length : 0}</p>
-                <div style="margin-top: 8px; padding: 8px; background: #f0f0f0; border-left: 3px solid #3498db;">
-                    <p style="margin: 0; font-size: 0.85rem; color: #666;">Each circle shows where a vehicle was at this exact moment. Click circles for details.</p>
-                </div>
-            </div>`);
-    } catch (err) {
-        setResult(`<span style="color: #e74c3c;">Error: ${err.message}</span>`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-async function loadMobilityWindow() {
-    const minLon = parseFloat(document.getElementById('minLon')?.value);
-    const minLat = parseFloat(document.getElementById('minLat')?.value);
-    const maxLon = parseFloat(document.getElementById('maxLon')?.value);
-    const maxLat = parseFloat(document.getElementById('maxLat')?.value);
-
-    if (isNaN(minLon) || isNaN(minLat) || isNaN(maxLon) || isNaN(maxLat)) {
-        return setResult(' Enter valid numeric bounding box values or click "Use Current Map Window"');
-    }
-
-    if (minLon >= maxLon || minLat >= maxLat) {
-        return setResult(' Invalid bounds: min must be less than max');
-    }
-
-    showSpinner(true);
-    try {
-        layers.results.clearLayers();
-
-        const res = await fetch(
-            `${API_BASE_URL}/mobility/in-window?min_lon=${minLon}&min_lat=${minLat}&max_lon=${maxLon}&max_lat=${maxLat}`
-        );
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.detail || 'Failed to load trajectories');
-        }
-
-        const data = await res.json();
-        const vehicleCount = data.features ? data.features.length : 0;
-
-        // Draw selection window
-        const windowBounds = [[parseFloat(minLat), parseFloat(minLon)], [parseFloat(maxLat), parseFloat(maxLon)]];
-        L.rectangle(windowBounds, {
-            color: '#2c3e50',
-            weight: 3,
-            fill: true,
-            fillColor: '#3498db',
-            fillOpacity: 0.15,
-            dashArray: '5, 5'
-        }).addTo(layers.results);
-
-        // Draw trajectories with colors by vehicle
-        const vehicleStats = {};
-        const geoLayer = L.geoJSON(data, {
-            style: function(feature) {
-                const vehicleId = feature.properties?.vehicle_id || 'UNKNOWN';
-                               if (!vehicleStats[vehicleId]) {
-                    vehicleStats[vehicleId] = { route: feature.properties?.route_id || 'N/A' };
-                }
-                return {
-                    color: getVehicleColor(vehicleId),
-                    weight: 5,
-                    opacity: 0.85,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                };
-            },
-            onEachFeature: function(feature, layer) {
-                const props = feature.properties || {};
-                const popup = `
-                    <div style="font-family: monospace; font-size: 12px;">
-                        <b style="color: ${getVehicleColor(props.vehicle_id)}">${props.vehicle_id}</b><br>
-                        <i>Route:</i> <b>${props.route_id || 'N/A'}</b><br>
-                        <i>In window:</i> Yes
-                    </div>
-                `;
-                layer.bindPopup(popup);
-            }
-        }).addTo(layers.results);
-
-        if (data.features && data.features.length > 0) {
-            const bounds = geoLayer.getBounds();
-            if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
-        }
-
-        let vehicleLegend = '';
-        Object.entries(vehicleStats).forEach(([vid, info]) => {
-            vehicleLegend += `<div style="margin: 4px 0;"><span style="color: ${getVehicleColor(vid)}; font-weight: bold;">███</span> ${vid} (${info.route})</div>`;
-        });
-
-        const area = (parseFloat(maxLon) - parseFloat(minLon)) * (parseFloat(maxLat) - parseFloat(minLat));
-
-        setResult(`<h4>Spatial Window Query</h4>
-            <div style="font-size: 0.9rem;">
-                <p><b>Bounds:</b> Lon [${minLon.toFixed(3)} → ${maxLon.toFixed(3)}], Lat [${minLat.toFixed(3)} → ${maxLat.toFixed(3)}]</p>
-                <p><b>Area:</b> ~${area.toFixed(6)}° (shaded on map)</p>
-                <p><b>Trajectories Found:</b> <span style="font-weight: bold; font-size: 1.1em; color: #2980b9;">${vehicleCount}</span></p>
-                ${vehicleLegend ? `<div style="margin-top: 8px; padding: 8px; background: #ecf0f1; border-radius: 4px;">${vehicleLegend}</div>` : '<p style="color: #666;">No vehicles in this window.</p>'}
-                <p style="font-size: 0.85rem; color: #666; margin-top: 8px;"><i>Select an area to view vehicle trajectories passing through it.</i></p>
-            </div>`);
-    } catch (err) {
-        setResult(`<span style="color: #e74c3c;"> Error: ${err.message}</span>`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
+// ==================== ROUTING ====================
 async function loadMetroStations() {
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/analysis/metro-stations`);
-        if (!res.ok) throw new Error('Failed to load metro stations');
+        const res = await fetch(`${API_BASE_URL}/explorer/routes`);
+        if (!res.ok) throw new Error('Failed to load routes');
 
-        const stations = await res.json();
+        const routes = await res.json();
+        const metroRoutes = routes.filter(r =>
+            String(r.route_short_name || '').toUpperCase().startsWith('M')
+        );
+
+        const uniqueStations = new Map();
+        metroRouteDetailsCache = [];
+
+        for (const route of metroRoutes) {
+            try {
+                const routeRes = await fetch(`${API_BASE_URL}/explorer/route/${route.route_id}`);
+                if (!routeRes.ok) continue;
+
+                const routeData = await routeRes.json();
+                metroRouteDetailsCache.push(routeData);
+
+                (routeData.stops || []).forEach(stop => {
+                    if (!uniqueStations.has(String(stop.stop_id))) {
+                        uniqueStations.set(String(stop.stop_id), stop);
+                    }
+                });
+            } catch (err) {
+                console.warn("Skipping metro route:", route.route_id, err);
+            }
+        }
+
+        const stations = Array.from(uniqueStations.values()).sort((a, b) =>
+            String(a.stop_name).localeCompare(String(b.stop_name))
+        );
 
         const startSelect = document.getElementById('metroStartSelect');
         const endSelect = document.getElementById('metroEndSelect');
+        const routeSelect = document.getElementById('baseRouteSelect');
 
         if (!startSelect || !endSelect) return;
 
@@ -1250,7 +647,18 @@ async function loadMetroStations() {
             endSelect.appendChild(opt2);
         });
 
-        setResult(`Loaded ${stations.length} metro stations.`);
+        // Populate route selector
+        if (routeSelect) {
+            routeSelect.innerHTML = `<option value="">Choose a metro route...</option>`;
+            metroRouteDetailsCache.forEach(route => {
+                const opt = document.createElement('option');
+                opt.value = route.route_id;
+                opt.textContent = `${route.route_short_name} - ${route.route_long_name || 'Route'}`;
+                routeSelect.appendChild(opt);
+            });
+        }
+
+        setResult(`Loaded ${stations.length} metro stations and ${metroRouteDetailsCache.length} routes.`);
     } catch (err) {
         setResult(`Error: ${err.message}`);
     } finally {
@@ -1258,42 +666,563 @@ async function loadMetroStations() {
     }
 }
 
-async function loadMetroNetwork() {
-    try {
-        const res = await fetch(`${API_BASE_URL}/explorer/network`);
-        if (!res.ok) throw new Error('Failed to load metro network');
+async function showStaticRoute() {
+    const startId = document.getElementById('metroStartSelect')?.value;
+    const endId = document.getElementById('metroEndSelect')?.value;
 
-        const data = await res.json();
-
-        layers.network.clearLayers();
-
-        L.geoJSON(data, {
-            style: {
-                color: '#7f8c8d',
-                weight: 3,
-                opacity: 0.6
-            },
-            onEachFeature: function(feature, layer) {
-                const props = feature.properties || {};
-                layer.bindPopup(`
-                    <b>${props.route_short_name || 'Metro Line'}</b><br>
-                    ${props.route_long_name || ''}
-                `);
-            }
-        }).addTo(layers.network);
-
-    } catch (err) {
-        setResult(`Error loading metro network: ${err.message}`);
+    if (!startId || !endId) {
+        return setResult('Choose start and end metro stations.');
     }
+
+    if (!metroRouteDetailsCache.length) {
+        return setResult('Metro route data is not loaded yet.');
+    }
+
+    layers.paths.clearLayers();
+
+    let matchedRoute = null;
+    let slicedStops = [];
+
+    for (const routeData of metroRouteDetailsCache) {
+        const stops = routeData.stops || [];
+        const startIndex = stops.findIndex(s => String(s.stop_id) === String(startId));
+        const endIndex = stops.findIndex(s => String(s.stop_id) === String(endId));
+
+        if (startIndex !== -1 && endIndex !== -1) {
+            matchedRoute = routeData;
+
+            if (startIndex <= endIndex) {
+                slicedStops = stops.slice(startIndex, endIndex + 1);
+            } else {
+                slicedStops = stops.slice(endIndex, startIndex + 1).reverse();
+            }
+            break;
+        }
+    }
+
+    if (!matchedRoute || !slicedStops.length) {
+        return setResult('No static metro route found between the selected stations.');
+    }
+
+    const latlngs = slicedStops.map(stop => [stop.stop_lat, stop.stop_lon]);
+
+    L.polyline(latlngs, {
+        color: '#7f8c8d',
+        weight: 4,
+        opacity: 0.85
+    }).addTo(layers.paths);
+
+    slicedStops.forEach((stop, i) => {
+        L.circleMarker([stop.stop_lat, stop.stop_lon], {
+            radius: 5,
+            color: '#7f8c8d',
+            weight: 2,
+            fillOpacity: 0.8
+        }).bindPopup(`${i + 1}. ${stop.stop_name}`).addTo(layers.paths);
+    });
+
+    const bounds = L.latLngBounds(latlngs);
+    if (bounds.isValid()) map.fitBounds(bounds);
+
+    let html = `<h4>Static Metro Route</h4>
+        <b>Line:</b> ${matchedRoute.route.route_short_name || matchedRoute.route.route_id}<br>
+        <b>Stops:</b> ${slicedStops.length}<br>
+        <h5>Stops in Order:</h5>`;
+
+    slicedStops.forEach((stop, i) => {
+        html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+            ${i + 1}. <b>${stop.stop_name}</b>
+        </div>`;
+    });
+
+    setResult(html);
 }
 
 function syncMetroDropdownsToPathInputs() {
-    const start = document.getElementById('metroStartSelect')?.value || '';
-    const end = document.getElementById('metroEndSelect')?.value || '';
+    const start = document.getElementById("metroStartSelect")?.value || "";
+    const end = document.getElementById("metroEndSelect")?.value || "";
 
-    const rawStart = document.getElementById('pathStart');
-    const rawEnd = document.getElementById('pathEnd');
+    const rawStart = document.getElementById("pathStart");
+    const rawEnd = document.getElementById("pathEnd");
 
     if (rawStart) rawStart.value = start;
     if (rawEnd) rawEnd.value = end;
+}
+
+function getPathInputValues() {
+    const rawStart = document.getElementById("pathStart")?.value?.trim() || "";
+    const rawEnd = document.getElementById("pathEnd")?.value?.trim() || "";
+    return { start: rawStart, end: rawEnd };
+}
+
+async function enrichPathStopsWithCoordinates(stops) {
+    await loadAllStopsForSearch();
+    const lookup = new Map(allStopsCache.map((s) => [String(s.stop_id), s]));
+
+    return stops.map((stop) => {
+        const full = lookup.get(String(stop.stop_id));
+        return {
+            stop_id: stop.stop_id,
+            stop_name: stop.stop_name,
+            lat: full?.stop_lat ?? null,
+            lon: full?.stop_lon ?? null,
+            distance_from_start: Number(stop.agg_cost ?? stop.cost ?? 0),
+        };
+    }).filter((s) => s.lat !== null && s.lon !== null);
+}
+
+// Store current paths for comparison
+let currentBasePath = null;
+let currentComparePaths = [];
+
+async function showBaseRoute() {
+    const { start, end } = getPathInputValues();
+    if (!start || !end) return setResult("Choose start and end stops.");
+
+    showSpinner(true);
+    try {
+        const data = await fetchJson(
+            `${API_BASE_URL}/routes/dijkstra?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`
+        );
+
+        const path = await enrichPathStopsWithCoordinates(data.stops || []);
+        currentBasePath = {
+            algorithm: "Base Route (Direct)",
+            path,
+            total_distance: path.length ? path[path.length - 1].distance_from_start : 0,
+            hops: path.length,
+        };
+
+        // Clear all paths and draw base route
+        currentComparePaths = [];
+        layers.paths.clearLayers();
+        drawBasePathOnly();
+        
+        setResult(`<h4>Base Route Selected</h4>
+            Start: <b>${path[0].stop_name}</b><br>
+            End: <b>${path[path.length-1].stop_name}</b><br>
+            Distance: ${Math.round(currentBasePath.total_distance)}<br>
+            Stops: ${currentBasePath.hops}<br>
+            <hr>
+            <p style="color: #666; font-size: 0.9em;">
+                Now select <b>Dijkstra</b> or <b>A*</b> to compare algorithms on this route.
+            </p>`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+function drawBasePathOnly() {
+    if (!currentBasePath) return;
+
+    const path = currentBasePath.path;
+    const latlngs = path.map((p) => [p.lat, p.lon]);
+    if (!latlngs.length) return;
+
+    // Draw base route in light gray
+    L.polyline(latlngs, {
+        color: '#95a5a6',
+        weight: 3,
+        opacity: 0.6,
+        dashArray: '5, 5',
+    }).addTo(layers.paths);
+
+    path.forEach((stop, i) => {
+        L.circleMarker([stop.lat, stop.lon], {
+            radius: 4,
+            color: '#95a5a6',
+            weight: 1,
+            fillOpacity: 0.5,
+        })
+            .bindPopup(`${i + 1}. ${escapeHtml(stop.stop_name)}`)
+            .addTo(layers.paths);
+    });
+
+    const bounds = L.latLngBounds(latlngs);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+}
+
+async function runDijkstra() {
+    const { start, end } = getPathInputValues();
+    if (!start || !end) return setResult("Choose start and end stops.");
+
+    showSpinner(true);
+    try {
+        const data = await fetchJson(
+            `${API_BASE_URL}/routes/dijkstra?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`
+        );
+
+        const path = await enrichPathStopsWithCoordinates(data.stops || []);
+        const pathObj = {
+            algorithm: "Dijkstra",
+            path,
+            total_distance: path.length ? path[path.length - 1].distance_from_start : 0,
+            hops: path.length,
+        };
+
+        // If no base path exists, set this as base, otherwise overlay
+        if (!currentBasePath) {
+            currentBasePath = pathObj;
+            currentComparePaths = [];
+            layers.paths.clearLayers();
+            drawBasePathOnly();
+        } else {
+            currentComparePaths = [pathObj];
+            layers.paths.clearLayers();
+            drawBasePathOnly();
+            drawOverlayPath(pathObj, "#3498db");
+        }
+
+        displayComparisonInfo();
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function runAStar() {
+    const { start, end } = getPathInputValues();
+    if (!start || !end) return setResult("Choose start and end stops.");
+
+    showSpinner(true);
+    try {
+        const data = await fetchJson(
+            `${API_BASE_URL}/routes/astar?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`
+        );
+
+        const path = await enrichPathStopsWithCoordinates(data.stops || []);
+        const pathObj = {
+            algorithm: "A*",
+            path,
+            total_distance: path.length ? path[path.length - 1].distance_from_start : 0,
+            hops: path.length,
+        };
+
+        // If no base path exists, set this as base, otherwise overlay
+        if (!currentBasePath) {
+            currentBasePath = pathObj;
+            currentComparePaths = [];
+            layers.paths.clearLayers();
+            drawBasePathOnly();
+        } else {
+            currentComparePaths = [pathObj];
+            layers.paths.clearLayers();
+            drawBasePathOnly();
+            drawOverlayPath(pathObj, "#e74c3c");
+        }
+
+        displayComparisonInfo();
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+function drawOverlayPath(pathObj, color) {
+    const latlngs = pathObj.path.map((p) => [p.lat, p.lon]);
+    if (!latlngs.length) return;
+
+    // Draw overlay route in bold color
+    L.polyline(latlngs, {
+        color,
+        weight: 5,
+        opacity: 0.9,
+    }).addTo(layers.paths);
+
+    pathObj.path.forEach((stop, i) => {
+        L.circleMarker([stop.lat, stop.lon], {
+            radius: 6,
+            color,
+            weight: 2,
+            fillOpacity: 0.8,
+        })
+            .bindPopup(`${pathObj.algorithm} - ${i + 1}. ${escapeHtml(stop.stop_name)}`)
+            .addTo(layers.paths);
+    });
+}
+
+function displayComparisonInfo() {
+    if (!currentBasePath) return;
+
+    let html = `<h4>Route Comparison</h4>
+        <div style="padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">
+            <b style="color: #95a5a6;">━━ Base Route</b><br>
+            Stops: ${currentBasePath.hops} | Distance: ${Math.round(currentBasePath.total_distance)}
+        </div>`;
+
+    currentComparePaths.forEach(algo => {
+        const color = algo.algorithm === "Dijkstra" ? "#3498db" : "#e74c3c";
+        const timeSaved = currentBasePath.total_distance - algo.total_distance;
+        const improvement = timeSaved !== 0 ? ` (${timeSaved > 0 ? "-" : "+"}${Math.abs(timeSaved)})` : " (same)";
+        
+        html += `<div style="padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid ${color};">
+            <b style="color: ${color};">━━ ${algo.algorithm}</b><br>
+            Stops: ${algo.hops} | Distance: ${Math.round(algo.total_distance)}${improvement}
+        </div>`;
+    });
+
+    html += `<hr><h5>Base Route Stops:</h5>`;
+    currentBasePath.path.forEach((stop, i) => {
+        html += `<div style="padding: 3px; font-size: 0.85em; border-bottom: 1px solid #eee;">
+            ${i + 1}. ${escapeHtml(stop.stop_name)}
+        </div>`;
+    });
+
+    setResult(html);
+}
+
+function drawPath(pathObj, color) {
+    layers.paths.clearLayers();
+
+    const latlngs = pathObj.path.map((p) => [p.lat, p.lon]);
+    if (!latlngs.length) {
+        setResult("Path returned, but stop coordinates could not be resolved.");
+        return;
+    }
+
+    L.polyline(latlngs, {
+        color,
+        weight: 4,
+        opacity: 0.85,
+    }).addTo(layers.paths);
+
+    pathObj.path.forEach((stop, i) => {
+        L.circleMarker([stop.lat, stop.lon], {
+            radius: 5,
+            color,
+            weight: 2,
+            fillOpacity: 0.85,
+        })
+            .bindPopup(`${i + 1}. ${escapeHtml(stop.stop_name)}`)
+            .addTo(layers.paths);
+    });
+
+    const bounds = L.latLngBounds(latlngs);
+    if (bounds.isValid()) map.fitBounds(bounds);
+
+    displayPathInfo(pathObj);
+}
+
+function displayPathInfo(pathObj) {
+    let html = `<h4>${escapeHtml(pathObj.algorithm)} Path</h4>
+        Total Cost: ${Math.round(Number(pathObj.total_distance || 0))}<br>
+        Hops: ${pathObj.hops}<br>
+        <h5>Stops in Order:</h5>`;
+
+    pathObj.path.forEach((stop, i) => {
+        html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+            ${i + 1}. <b>${escapeHtml(stop.stop_name)}</b><br>
+            Cost from start: ${Math.round(Number(stop.distance_from_start || 0))}
+        </div>`;
+    });
+
+    setResult(html);
+}
+async function runTSP() {
+    const startId = document.getElementById('tspStartSelect')?.value?.trim();
+    const stopsInput = document.getElementById('tspStopsInput')?.value?.trim();
+
+    if (!startId) {
+        return setResult('Please choose a starting station.');
+    }
+
+    if (!stopsInput) {
+        return setResult('Please enter at least one stop ID (comma-separated).');
+    }
+
+    const stopIds = stopsInput
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+    if (!stopIds.length) {
+        return setResult('Please enter at least one valid stop ID.');
+    }
+
+    if (stopIds.length > 20) {
+        return setResult('Maximum 20 stops allowed for TSP optimization.');
+    }
+
+    showSpinner(true);
+    try {
+        const query = new URLSearchParams();
+        query.append('start_id', startId);
+        stopIds.forEach(id => query.append('stop_ids', id));
+
+        const res = await fetch(`${API_BASE_URL}/routes/tsp?${query.toString()}`);
+        if (!res.ok) {
+            const error = await res.text();
+            throw new Error(error || 'TSP calculation failed');
+        }
+
+        const data = await res.json();
+
+        let html = `<h4>📍 TSP - Optimized Multi-Stop Route</h4>
+            <div style="padding: 8px; background: #e8f4f8; border-radius: 4px; margin-bottom: 10px;">
+                <b>Start Station:</b> (${startId})<br>
+                <b>Stops to Visit:</b> ${stopIds.length}<br>
+            </div>`;
+
+        if (data.stops && data.stops.length) {
+            html += `<h5>Selected Stops:</h5>`;
+            data.stops.forEach((stop, i) => {
+                html += `<div style="padding: 6px; background: #f9f9f9; border-left: 3px solid #3498db; margin: 4px 0; border-radius: 2px;">
+                    <b>${stop.stop_name}</b><br>
+                    <small style="color: #666;">ID: ${stop.stop_id}</small>
+                </div>`;
+            });
+        }
+
+        if (data.order && data.order.length) {
+            html += `<hr><h5>✓ Recommended Visit Order:</h5>`;
+            data.order.forEach((item, i) => {
+                html += `<div style="padding: 8px; background: #f0f8f0; border-left: 4px solid #27ae60; margin: 4px 0;">
+                    <b style="color: #27ae60;">${i + 1}.</b> Stop ID: ${item.node}
+                </div>`;
+            });
+            html += `<p style="font-size: 0.85em; color: #666; margin-top: 8px;">
+                <i>This order minimizes total distance/cost.</i>
+            </p>`;
+        }
+
+        setResult(html);
+    } catch (err) {
+        setResult(`<span style="color: #e74c3c;">Error: ${err.message}</span>`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+// ==================== ADVANCED ====================
+async function getStopById() {
+    const stopId = document.getElementById("stopId")?.value?.trim();
+    if (!stopId) return setResult("Enter a stop ID");
+
+    showSpinner(true);
+    try {
+        const stop = await fetchJson(`${API_BASE_URL}/explorer/${encodeURIComponent(stopId)}`);
+
+        layers.results.clearLayers();
+        L.circleMarker([stop.stop_lat, stop.stop_lon], {
+            radius: 8,
+            color: "#e74c3c",
+            weight: 2,
+            fillOpacity: 0.8,
+        })
+            .bindPopup(`<b>${escapeHtml(stop.stop_name)}</b><br>ID: ${escapeHtml(stop.stop_id)}`)
+            .addTo(layers.results);
+
+        map.setView([stop.stop_lat, stop.stop_lon], 14);
+        setResult(`<b>${escapeHtml(stop.stop_name)}</b><br>ID: ${escapeHtml(stop.stop_id)}<br>Lat: ${stop.stop_lat}<br>Lon: ${stop.stop_lon}`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function getStopByCode() {
+    const code = document.getElementById("stopCode")?.value?.trim();
+    if (!code) return setResult("Enter a stop code");
+
+    showSpinner(true);
+    try {
+        const stop = await fetchJson(`${API_BASE_URL}/advanced/${encodeURIComponent(code)}`);
+
+        layers.results.clearLayers();
+        L.circleMarker([stop.stop_lat, stop.stop_lon], {
+            radius: 8,
+            color: "#3498db",
+            weight: 2,
+            fillOpacity: 0.8,
+        })
+            .bindPopup(`<b>${escapeHtml(stop.stop_name)}</b><br>Code: ${escapeHtml(stop.stop_code)}`)
+            .addTo(layers.results);
+
+        map.setView([stop.stop_lat, stop.stop_lon], 14);
+        setResult(`<b>${escapeHtml(stop.stop_name)}</b><br>Code: ${escapeHtml(stop.stop_code)}<br>ID: ${escapeHtml(stop.stop_id)}`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function loadAllStops() {
+    showSpinner(true);
+    try {
+        const stops = await loadAllStopsForSearch();
+
+        layers.stops.clearLayers();
+        const mcg = L.markerClusterGroup();
+
+        stops.forEach((stop) => {
+            const marker = L.circleMarker([stop.stop_lat, stop.stop_lon], {
+                radius: 4,
+                color: "#27ae60",
+                weight: 1,
+                fillOpacity: 0.7,
+            }).bindPopup(`${escapeHtml(stop.stop_name)}<br>ID: ${escapeHtml(stop.stop_id)}`);
+            mcg.addLayer(marker);
+        });
+
+        layers.stops.addLayer(mcg);
+        setResult(`Loaded all ${stops.length} stops.`);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function loadTopRoutes() {
+    const limit = document.getElementById("topRoutesLimit")?.value || 10;
+    showSpinner(true);
+    try {
+        const data = await fetchJson(`${API_BASE_URL}/advanced/top-routes?limit=${encodeURIComponent(limit)}`);
+
+        let html = `<h4>Top ${limit} Routes by Trips</h4>`;
+        data.forEach((route) => {
+            html += `<div style="padding: 8px; background: #ecf0f1; margin: 5px 0; border-radius: 4px; cursor: pointer;"
+                onclick="showRouteWithStops('${String(route.route_id).replace(/'/g, "\\'")}')">
+                <b>${escapeHtml(route.route_short_name)}</b> - ${escapeHtml(route.route_long_name || "N/A")}<br>
+                <small>Trips: ${route.trip_count} | Stops: ${route.stop_count}</small>
+            </div>`;
+        });
+
+        setResult(html);
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+// ==================== MOBILITY PLACEHOLDERS ====================
+// The current backend in this project version does not expose mobility endpoints.
+// These placeholders prevent frontend crashes and clearly inform the user.
+
+function setMobilityTimePreset(value) {
+    const input = document.getElementById("mobilityTime");
+    if (input) input.value = value;
+}
+
+function loadMobilityTrajectories() {
+    setResult("Mobility endpoints are not available in this backend version yet.");
+}
+
+function loadMobilityAtTime() {
+    setResult("Mobility endpoints are not available in this backend version yet.");
+}
+
+function loadMobilityCurrentWindow() {
+    setResult("Mobility endpoints are not available in this backend version yet.");
+}
+
+function loadMobilityWindow() {
+    setResult("Mobility endpoints are not available in this backend version yet.");
 }

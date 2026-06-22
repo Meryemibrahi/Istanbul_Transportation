@@ -39,23 +39,49 @@ def get_stop_by_id(stop_id: str) -> Dict[str, Any]:
     return results[0] if results else {}
 
 def get_full_network():
-    query = """
-    SELECT DISTINCT ON (r.route_id)
-        r.route_id,
-        r.route_short_name,
-        r.route_long_name,
-        ST_AsGeoJSON(
-            ST_MakeLine(
-                ST_MakePoint(s.shape_pt_lon, s.shape_pt_lat)
-                ORDER BY s.shape_pt_sequence
-            )
-        ) AS geojson
-    FROM shapes s
-    JOIN trips t ON t.shape_id = s.shape_id
-    JOIN routes r ON r.route_id = t.route_id
-    GROUP BY r.route_id, r.route_short_name, r.route_long_name, s.shape_id;
+    routes_query = """
+    WITH route_paths AS (
+        SELECT 
+            r.route_id,
+            r.route_short_name,
+            r.route_long_name,
+            ST_AsGeoJSON(
+                ST_MakeLine(
+                    ST_MakePoint(s.stop_lon, s.stop_lat)
+                    ORDER BY st.stop_sequence
+                )
+            ) AS geojson
+        FROM routes r
+        JOIN trips t ON r.route_id = t.route_id
+        JOIN stop_times st ON t.trip_id = st.trip_id
+        JOIN stops s ON st.stop_id = s.stop_id
+        GROUP BY r.route_id, r.route_short_name, r.route_long_name, t.trip_id
+    )
+    SELECT DISTINCT ON (route_id)
+        route_id,
+        route_short_name,
+        route_long_name,
+        geojson
+    FROM route_paths
+    WHERE geojson IS NOT NULL
+    ORDER BY route_id;
     """
-    return execute_query(query)
+    
+    stops_query = """
+        SELECT stop_id, stop_code, stop_name, stop_desc, stop_lat, stop_lon,
+               zone_id, stop_url, location_type, parent_station, 
+               stop_timezone, wheelchair_boarding
+        FROM stops
+        ORDER BY stop_name
+    """
+    
+    routes = execute_query(routes_query)
+    stops = execute_query(stops_query)
+    
+    return {
+        "routes": routes,
+        "stops": stops
+    }
 
 def get_all_routes() -> List[Dict[str, Any]]:
     query = """

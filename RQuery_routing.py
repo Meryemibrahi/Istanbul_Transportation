@@ -5,10 +5,34 @@ DONE! -> complete
 
 from database_Creation import execute_query, connect_Database
 from fastapi import HTTPException
+from typing import Optional, Dict, Any
 
-# -----------------------------
+# -------------------------
+# STOP ID TO VERTEX ID CONVERSION
+# -------------------------
+
+def get_vertex_id_from_stop_id(stop_id: str) -> Optional[int]:
+    """
+    Convert a stop_id to its corresponding vertex_id in the routing graph.
+    
+    Args:
+        stop_id: The GTFS stop ID
+        
+    Returns:
+        The vertex_id if found, None otherwise
+    """
+    query = """
+        SELECT vertex_id
+        FROM stop_vertices
+        WHERE stop_id = %s
+        LIMIT 1
+    """
+    results = execute_query(query, (stop_id,))
+    return results[0]['vertex_id'] if results else None
+
+# -------------------------
 # DIJKSTRA
-# -----------------------------
+# -------------------------
 
 def get_dijkstra_stop_list_query(start_vertex_id, end_vertex_id):
     query = """
