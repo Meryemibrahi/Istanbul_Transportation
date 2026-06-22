@@ -10,57 +10,278 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="/static/style.css" />
-
-    <style>
-        .helper-text {
-            font-size: 0.85rem;
-            color: #666;
-            margin: 4px 0 8px 0;
-        }
-
-        .section-card {
-            background: #f8f9fa;
-            border: 1px solid #e2e6ea;
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-
-        .preset-row {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-bottom: 8px;
-        }
-
-        .preset-row button {
-            flex: 1;
-            min-width: 80px;
-        }
-
-        details {
-            margin-top: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 8px;
-            background: #fcfcfc;
-        }
-
-        summary {
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .two-col {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <aside class="sidebar">
+    <!-- HEADER WITH LOGO -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="logo-space">G</div>
+            <div class="header-text">
+                <h1>GTFS Transit Portal</h1>
+                <p>Spatial Route Analysis</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <img src="/static/ytu_logo.png" alt="YTU Logo" class="header-image" />
+        </div>
+    </header>
+
+
+    <!-- HORIZONTAL TABS -->
+    <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="explore">
+            <i class="fas fa-compass"></i> Explore
+        </button>
+        <button class="tab-btn" data-tab="spatial">
+            <i class="fas fa-draw-polygon"></i> Spatial Tools
+        </button>
+        <button class="tab-btn" data-tab="routing">
+            <i class="fas fa-route"></i> Routing
+        </button>
+        <button class="tab-btn" data-tab="mobility">
+            <i class="fas fa-truck"></i> Mobility
+        </button>
+        <button class="tab-btn" data-tab="advanced">
+            <i class="fas fa-code"></i> Advanced
+        </button>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <div class="container">
+            <!-- SIDEBAR -->
+            <aside class="sidebar">
+                <div class="sidebar-scroll">
+                    <button class="btn btn-secondary" onclick="clearMap()" style="margin-bottom: 12px;">
+                        <i class="fas fa-eraser"></i> Clear Map
+                    </button>
+
+                    <!-- EXPLORE TAB -->
+                    <div class="tab-content active" id="explore-tab">
+                        <div class="section">
+                            <h3>Explore Network</h3>
+
+                            <div class="section-card">
+                                <label>Search Stop by Name</label>
+                                <input type="text" id="stopNameSearch" placeholder="e.g., Central Station" class="input-field" />
+                                <button class="btn btn-primary" onclick="searchStopsByName()">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                                <button class="btn btn-secondary" onclick="loadAllStops()">
+                                    <i class="fas fa-location-dot"></i> All Stops
+                                </button>
+                            </div>
+
+                            <div class="section-card">
+                                <label>Select Route</label>
+                                <select id="routeSelect" class="input-field">
+                                    <option value="">Choose a route...</option>
+                                </select>
+                                <button class="btn btn-primary" onclick="showSelectedRouteFromDropdown()">
+                                    <i class="fas fa-route"></i> Show Route
+                                </button>
+                                <button class="btn btn-secondary" onclick="populateRouteDropdown()">
+                                    <i class="fas fa-sync"></i> Refresh
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SPATIAL TAB -->
+                    <div class="tab-content" id="spatial-tab" style="display:none;">
+                        <div class="section">
+                            <h3>Spatial Tools</h3>
+
+                            <div class="section-card">
+                                <h4>Nearest Stops</h4>
+                                <div class="two-col">
+                                    <input type="number" id="nearLat" placeholder="Latitude" step="0.0001" class="input-field" />
+                                    <input type="number" id="nearLon" placeholder="Longitude" step="0.0001" class="input-field" />
+                                </div>
+                                <div class="two-col">
+                                    <input type="number" id="nearRadius" placeholder="Radius (m)" value="500" class="input-field" />
+                                    <input type="number" id="nearLimit" placeholder="k value" value="" class="input-field" />
+                                </div>
+                                <button class="btn btn-primary" onclick="findNearestStops()">
+                                    <i class="fas fa-location-crosshairs"></i> Find Stops
+                                </button>
+                                <button class="btn btn-secondary" onclick="enableNearestStopMode()">
+                                    <i class="fas fa-mouse-pointer"></i> Pick from Map
+                                </button>
+                            </div>
+
+                            <div class="section-card">
+                                <h4>Window Query</h4>
+                                <button class="btn btn-primary" onclick="enableAreaSelection()">
+                                    <i class="fas fa-vector-square"></i> Draw Area
+                                </button>
+                                <button class="btn btn-secondary" onclick="useCurrentMapWindow()">
+                                    <i class="fas fa-expand"></i> Use Current View
+                                </button>
+                            </div>
+
+                            <div class="section-card">
+                                <h4>Busiest Stops</h4>
+                                <div class="two-col">
+                                    <input type="number" id="busyStart" min="0" max="23" value="6" class="input-field" />
+                                    <input type="number" id="busyEnd" min="0" max="23" value="9" class="input-field" />
+                                </div>
+                                <button class="btn btn-primary" onclick="showBusiestStops()">
+                                    <i class="fas fa-chart-bar"></i> Show Busiest
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ROUTING TAB -->
+                    <div class="tab-content" id="routing-tab" style="display:none;">
+                        <div class="section">
+                            <h3>Route Calculation</h3>
+
+                            <div class="section-card">
+                                <button class="btn btn-primary" onclick="displayAllMetroRoutes();" style="width: 100%; margin-bottom: 12px;">
+                                    <i class="fas fa-map"></i> Show All Routes
+                                </button>
+
+                                <label>Base Metro Route</label>
+                                <select id="baseRouteSelect" class="input-field" onchange="onBaseRouteChange()">
+                                    <option value="">Choose a metro route...</option>
+                                </select>
+
+                                <label>Start Station</label>
+                                <select id="metroStartSelect" class="input-field">
+                                    <option value="">Choose start...</option>
+                                </select>
+
+                                <label>End Station</label>
+                                <select id="metroEndSelect" class="input-field">
+                                    <option value="">Choose end...</option>
+                                </select>
+
+                                <button class="btn btn-primary" onclick="syncMetroDropdownsToPathInputs(); runDijkstra();">
+                                    <i class="fas fa-code-branch"></i> Dijkstra
+                                </button>
+
+                                <button class="btn btn-primary" onclick="syncMetroDropdownsToPathInputs(); runAStar();">
+                                    <i class="fas fa-star"></i> A* Search
+                                </button>
+                            </div>
+
+                            <input type="hidden" id="pathStart" />
+                            <input type="hidden" id="pathEnd" />
+                        </div>
+                    </div>
+
+                    <!-- MOBILITY TAB -->
+                    <div class="tab-content" id="mobility-tab" style="display:none;">
+                        <div class="section">
+                            <h3>MobilityDB</h3>
+
+                            <div class="section-card">
+                                <button class="btn btn-primary" onclick="loadMobilityTrajectories()">
+                                    <i class="fas fa-route"></i> All Trajectories
+                                </button>
+                            </div>
+
+                            <div class="section-card">
+                                <h4>Positions At Time</h4>
+                                <div class="preset-row">
+                                    <button class="btn btn-secondary" onclick="setMobilityTimePreset('2026-05-25 08:00:00+03')">08:00</button>
+                                    <button class="btn btn-secondary" onclick="setMobilityTimePreset('2026-05-25 08:05:00+03')">08:05</button>
+                                    <button class="btn btn-secondary" onclick="setMobilityTimePreset('2026-05-25 08:10:00+03')">08:10</button>
+                                </div>
+                                <input type="text" id="mobilityTime" placeholder="2026-05-25 08:05:00+03" class="input-field" />
+                                <button class="btn btn-primary" onclick="loadMobilityAtTime()">
+                                    <i class="fas fa-clock"></i> Show at Time
+                                </button>
+                            </div>
+
+                            <div class="section-card">
+                                <h4>Current Window</h4>
+                                <button class="btn btn-primary" onclick="loadMobilityCurrentWindow()">
+                                    <i class="fas fa-expand"></i> Trajectories in View
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADVANCED TAB -->
+                    <div class="tab-content" id="advanced-tab" style="display:none;">
+                        <div class="section">
+                            <h3>Developer Tools</h3>
+
+                            <details open>
+                                <summary>Stops</summary>
+                                <input type="text" id="stopId" placeholder="Stop ID" class="input-field" />
+                                <button class="btn btn-primary" onclick="getStopById()">Search by ID</button>
+
+                                <input type="text" id="stopCode" placeholder="Stop Code" class="input-field" />
+                                <button class="btn btn-primary" onclick="getStopByCode()">Search by Code</button>
+
+                                <button class="btn btn-secondary" onclick="loadAllStops()">All Stops</button>
+                                <button class="btn btn-secondary" onclick="displayFullNetwork()">Full Network</button>
+                            </details>
+
+                            <details>
+                                <summary>Routes</summary>
+                                <input type="text" id="routeId" placeholder="Route ID" class="input-field" />
+                                <button class="btn btn-primary" onclick="showRouteWithStops()">Show by ID</button>
+
+                                <input type="number" id="topRoutesLimit" value="10" min="1" max="100" class="input-field" />
+                                <button class="btn btn-secondary" onclick="loadTopRoutes()">Top Routes</button>
+                            </details>
+
+                            <details>
+                                <summary>Pathfinding</summary>
+                                <input type="text" id="pathStart" placeholder="Start Stop ID" class="input-field" />
+                                <input type="text" id="pathEnd" placeholder="End Stop ID" class="input-field" />
+                                <button class="btn btn-primary" onclick="runDijkstra()">Dijkstra</button>
+                                <button class="btn btn-primary" onclick="runAStar()">A*</button>
+                            </details>
+
+                            <details>
+                                <summary>Mobility Coords</summary>
+                                <input type="number" step="any" id="minLon" value="28.95" class="input-field" />
+                                <input type="number" step="any" id="minLat" value="41.00" class="input-field" />
+                                <input type="number" step="any" id="maxLon" value="29.10" class="input-field" />
+                                <input type="number" step="any" id="maxLat" value="41.10" class="input-field" />
+                                <button class="btn btn-primary" onclick="loadMobilityWindow()">Query Window</button>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RESULTS -->
+                <div class="result-box">
+                    <div class="result-header">
+                        <h4><i class="fas fa-info-circle"></i> Results</h4>
+                        <button class="close-btn" onclick="clearResults()">×</button>
+                    </div>
+                    <div id="resultBox" class="result-content">Ready</div>
+                </div>
+            </aside>
+
+            <!-- MAP -->
+            <main class="map-container">
+                <div id="map"></div>
+                <div class="map-info">
+                    <span id="coordDisplay">Lat: ---, Lon: ---</span>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- LOADING SPINNER -->
+    <div id="loadingSpinner" class="loading-spinner" style="display:none;">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>
             <div class="sidebar-header">
                 <h1><i class="fas fa-map"></i> GTFS Portal</h1>
             </div>
