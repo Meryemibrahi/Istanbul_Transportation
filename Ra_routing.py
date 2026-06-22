@@ -93,19 +93,47 @@ def get_astar_route(start_id: str, end_id: str):
     }
 
 @router.get("/tsp")
-def get_tsp_route(start_id: int, stop_ids: list[int] = Query(...)):
+def get_tsp_route(start_id: str, stop_ids: list[str] = Query(...)):
+    """
+    Find optimal TSP route through multiple stops.
+    Accepts stop IDs (strings) and converts them to vertex IDs internally.
+    
+    Args:
+        start_id: Starting stop ID (string, e.g., "stop123")
+        stop_ids: List of stop IDs to visit (strings)
+    """
+    # Convert start_id to vertex_id
+    start_vertex_id = get_vertex_id_from_stop_id(start_id)
+    if start_vertex_id is None:
+        raise HTTPException(status_code=404, detail=f"Start stop '{start_id}' not found in routing graph")
+    
+    # Convert all stop_ids to vertex_ids
+    vertex_ids = []
+    for stop_id in stop_ids:
+        vertex_id = get_vertex_id_from_stop_id(stop_id)
+        if vertex_id is None:
+            raise HTTPException(status_code=404, detail=f"Stop '{stop_id}' not found in routing graph")
+        vertex_ids.append(vertex_id)
+    
+    if not vertex_ids:
+        raise HTTPException(status_code=400, detail="No valid stops provided")
+    
     conn = connect_Database()
     try:
-        stops = get_tsp_selected_stops_query(stop_ids)
+        stops = get_tsp_selected_stops_query(vertex_ids)
         if not stops:
             raise HTTPException(status_code=404, detail="No stops found")
 
-        cost_matrix = get_tsp_cost_matrix_query(stop_ids)
-        tsp_order = get_tsp_order_query(conn, cost_matrix, start_id) 
+        cost_matrix = get_tsp_cost_matrix_query(vertex_ids)
+        if not cost_matrix:
+            raise HTTPException(status_code=400, detail="Could not calculate cost matrix")
+            
+        tsp_order = get_tsp_order_query(conn, cost_matrix, start_vertex_id) 
         
         return {
             "stops": stops,
-            "order": tsp_order
+            "order": tsp_order,
+            "message": f"TSP optimization complete for {len(vertex_ids)} stops"
         }
     finally:
         conn.close()

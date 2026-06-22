@@ -169,61 +169,77 @@
 
                 <!-- ROUTING TAB -->
                 <div class="tab-content" id="routing-tab" style="display:none;">
-                    <div class="section">
-                        <h3>Route Calculation & Comparison</h3>
+    <div class="section">
+        <h3>Route Calculation</h3>
 
-                        <div class="section-card">
-                            <label>Start Metro Station</label>
-                            <select id="metroStartSelect" class="input-field">
-                                <option value="">Choose start station...</option>
-                            </select>
+        <div class="section-card">
+            <label>Base Metro Route</label>
+            <select id="baseRouteSelect" class="input-field" onchange="onBaseRouteChange()">
+                <option value="">Choose a metro route...</option>
+            </select>
 
-                            <label>End Metro Station</label>
-                            <select id="metroEndSelect" class="input-field">
-                                <option value="">Choose end station...</option>
-                            </select>
+            <div class="helper-text">
+                Choose a metro route first so the start and end stations are guaranteed to belong to the same line.
+            </div>
 
-                            <button class="btn btn-secondary" onclick="syncMetroDropdownsToPathInputs(); showBaseRoute();" style="width: 100%;">
-                                <i class="fas fa-map-location-dot"></i> Load Base Route
-                            </button>
+            <label>Start Metro Station</label>
+            <select id="metroStartSelect" class="input-field">
+                <option value="">Choose start station...</option>
+            </select>
 
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                
-                                <button class="btn btn-primary" onclick="syncMetroDropdownsToPathInputs(); runDijkstra();">
-                                    <i class="fas fa-code-branch"></i> Dijkstra
-                                </button>
-                                <button class="btn btn-primary" onclick="syncMetroDropdownsToPathInputs(); runAStar();">
-                                    <i class="fas fa-star"></i> A*
-                                </button>
-                            </div>
-                            <p style="font-size: 0.85em; color: #666; margin: 8px 0 0 0;">
-                                Blue = Dijkstra, Red = A*
-                            </p>
-                        
-                        </div>
+            <label>End Metro Station</label>
+            <select id="metroEndSelect" class="input-field">
+                <option value="">Choose end station...</option>
+            </select>
 
-                        <!--<div class="section-card">
-                            <h4>TSP - Multi-Stop Route Optimization</h4>
+            <button class="btn btn-secondary" onclick="syncMetroDropdownsToPathInputs(); showStaticRoute();">
+                <i class="fas fa-minus"></i> Show Static Route
+            </button>
 
-                            <label><b>Start Station</b></label>
-                            <select id="tspStartSelect" class="input-field">
-                                <option value="">Choose start station...</option>
-                            </select>
+            <button class="btn btn-primary" onclick="syncMetroDropdownsToPathInputs(); runDijkstra();">
+                <i class="fas fa-code-branch"></i> Dijkstra
+            </button>
 
-                            <label><b>Stops to Visit</b></label>
-                            <p style="font-size: 0.8em; color: #999; margin: 4px 0 8px 0;">Enter stop IDs separated by commas</p>
-                            <input type="text" id="tspStopsInput" class="input-field" placeholder="e.g. S001,S005,S012" />
+            <button class="btn btn-primary" onclick="syncMetroDropdownsToPathInputs(); runAStar();">
+                <i class="fas fa-star"></i> A*
+            </button>
+        </div>
 
-                            <button class="btn btn-primary" onclick="runTSP()" style="width: 100%; margin-top: 8px;">
-                                <i class="fas fa-route"></i> Calculate Optimal Route
-                            </button>
-                        </div>-->
+        <div class="section-card">
+            <h4>TSP (Multi-Stop)</h4>
 
-                        <!-- hidden raw fields already used by JS -->
-                        <input type="hidden" id="pathStart" />
-                        <input type="hidden" id="pathEnd" />
-                    </div>
-                </div>
+            <label>TSP Start Station</label>
+            <select id="tspStartSelect" class="input-field">
+                <option value="">Choose start station...</option>
+            </select>
+
+            <label>Add Stop to Visit</label>
+            <div class="two-col">
+                <select id="tspStopSelect" class="input-field">
+                    <option value="">Choose stop...</option>
+                </select>
+                <button class="btn btn-secondary" onclick="addTspStop()">
+                    <i class="fas fa-plus"></i> Add Stop
+                </button>
+            </div>
+
+            <div id="tspSelectedStops" class="selected-box">
+                No TSP stops selected yet.
+            </div>
+
+            <button class="btn btn-primary" onclick="runTSP()">
+                <i class="fas fa-shuffle"></i> Run TSP
+            </button>
+
+            <button class="btn btn-secondary" onclick="clearTspStops()">
+                <i class="fas fa-trash"></i> Clear TSP
+            </button>
+        </div>
+
+        <input type="hidden" id="pathStart" />
+        <input type="hidden" id="pathEnd" />
+    </div>
+</div>
 
                 <!-- MOBILITY TAB -->
                 <div class="tab-content" id="mobility-tab" style="display:none;">

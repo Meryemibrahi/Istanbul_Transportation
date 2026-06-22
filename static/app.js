@@ -12,6 +12,9 @@ let allStopsCache = [];
 let allRoutesCache = [];
 let metroStationsCache = [];
 let metroRouteDetailsCache = [];
+let metroNetworkRoutesCache = [];
+let selectedBaseRouteData = null;
+let tspSelectedStops = [];
 
 const DEFAULT_CENTER = [41.01, 28.97];
 const DEFAULT_ZOOM = 11;
@@ -591,74 +594,106 @@ async function showBusiestStops() {
 async function loadMetroStations() {
     showSpinner(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/explorer/routes`);
-        if (!res.ok) throw new Error('Failed to load routes');
-
-        const routes = await res.json();
+        const routes = await loadAllRoutes();
         const metroRoutes = routes.filter(r =>
             String(r.route_short_name || '').toUpperCase().startsWith('M')
         );
 
-        const uniqueStations = new Map();
         metroRouteDetailsCache = [];
+        metroNetworkRoutesCache = [];
+
+        // load full network once to get actual route geojson
+        try {
+            const network = await fetchJson(`${API_BASE_URL}/explorer/network`);
+            metroNetworkRoutesCache = (network.routes || network.routes_data || []).filter(r =>
+                String(r.route_short_name || '').toUpperCase().startsWith('M')
+            );
+        } catch (err) {
+            console.warn("Could not load full network route shapes", err);
+        }
 
         for (const route of metroRoutes) {
             try {
-                const routeRes = await fetch(`${API_BASE_URL}/explorer/route/${route.route_id}`);
-                if (!routeRes.ok) continue;
-
-                const routeData = await routeRes.json();
+                const routeData = await fetchJson(`${API_BASE_URL}/explorer/route/${route.route_id}`);
                 metroRouteDetailsCache.push(routeData);
-
-                (routeData.stops || []).forEach(stop => {
-                    if (!uniqueStations.has(String(stop.stop_id))) {
-                        uniqueStations.set(String(stop.stop_id), stop);
-                    }
-                });
             } catch (err) {
                 console.warn("Skipping metro route:", route.route_id, err);
             }
         }
 
-        const stations = Array.from(uniqueStations.values()).sort((a, b) =>
-            String(a.stop_name).localeCompare(String(b.stop_name))
-        );
+        const baseRouteSelect = document.getElementById("baseRouteSelect");
+        if (baseRouteSelect) {
+            baseRouteSelect.innerHTML = `<option value="">Choose a metro route...</option>`;
 
-        const startSelect = document.getElementById('metroStartSelect');
-        const endSelect = document.getElementById('metroEndSelect');
-        const routeSelect = document.getElementById('baseRouteSelect');
-
-        if (!startSelect || !endSelect) return;
-
-        startSelect.innerHTML = `<option value="">Choose start station...</option>`;
-        endSelect.innerHTML = `<option value="">Choose end station...</option>`;
-
-        stations.forEach(station => {
-            const text = `${station.stop_name} (${station.stop_id})`;
-
-            const opt1 = document.createElement('option');
-            opt1.value = station.stop_id;
-            opt1.textContent = text;
-            startSelect.appendChild(opt1);
-
-            const opt2 = document.createElement('option');
-            opt2.value = station.stop_id;
-            opt2.textContent = text;
-            endSelect.appendChild(opt2);
-        });
-
-        // Populate route selector
-        if (routeSelect) {
-            routeSelect.innerHTML = `<option value="">Choose a metro route...</option>`;
-            metroRouteDetailsCache.forEach(route => {
-                const opt = document.createElement('option');
-                opt.value = route.route_id;
-                opt.textContent = `${route.route_short_name} - ${route.route_long_name || 'Route'}`;
-                routeSelect.appendChild(opt);
+            metroRouteDetailsCache.forEach(routeData => {
+                const opt = document.createElement("option");
+                opt.value = routeData.route.route_id;
+                opt.textContent = `${routeData.route.route_short_name || routeData.route.route_id} - ${routeData.route.route_long_name || "Metro Route"}`;
+                baseRouteSelect.appendChild(opt);
             });
         }
 
-        setResult(`Loaded ${stations.length} metro stations and ${metroRouteDetailsCache.length} routes.`);
+        // Populate station dropdowns with ALL metro stops from all routes
+        const startSelect = document.getElementById("metroStartSelect");
+        const endSelect = document.getElementById("metroEndSelect");
+        const tspStartSelect = document.getElementById("tspStartSelect");
+        const tspStopSelect = document.getElementById("tspStopSelect");
+
+        if (startSelect) startSelect.innerHTML = `<option value="">Choose start station...</option>`;
+        if (endSelect) endSelect.innerHTML = `<option value="">Choose end station...</option>`;
+        if (tspStartSelect) tspStartSelect.innerHTML = `<option value="">Choose start station...</option>`;
+        if (tspStopSelect) tspStopSelect.innerHTML = `<option value="">Choose stop...</option>`;
+
+        // Collect unique stops from all metro routes
+        const uniqueStops = new Map();
+        metroRouteDetailsCache.forEach(routeData => {
+            (routeData.stops || []).forEach(stop => {
+                const key = String(stop.stop_id);
+                if (!uniqueStops.has(key)) {
+                    uniqueStops.set(key, stop);
+                }
+            });
+        });
+
+        // Sort stops by name
+        const sortedStops = Array.from(uniqueStops.values()).sort((a, b) =>
+            String(a.stop_name).localeCompare(String(b.stop_name))
+        );
+
+        // Add all stops to dropdowns
+        sortedStops.forEach(stop => {
+            const label = `${stop.stop_name} (${stop.stop_id})`;
+
+            if (startSelect) {
+                const opt = document.createElement("option");
+                opt.value = stop.stop_id;
+                opt.textContent = label;
+                startSelect.appendChild(opt);
+            }
+
+            if (endSelect) {
+                const opt = document.createElement("option");
+                opt.value = stop.stop_id;
+                opt.textContent = label;
+                endSelect.appendChild(opt);
+            }
+
+            if (tspStartSelect) {
+                const opt = document.createElement("option");
+                opt.value = stop.stop_id;
+                opt.textContent = label;
+                tspStartSelect.appendChild(opt);
+            }
+
+            if (tspStopSelect) {
+                const opt = document.createElement("option");
+                opt.value = stop.stop_id;
+                opt.textContent = label;
+                tspStopSelect.appendChild(opt);
+            }
+        });
+
+        setResult(`Loaded ${metroRouteDetailsCache.length} metro routes with ${sortedStops.length} unique stations.`);
     } catch (err) {
         setResult(`Error: ${err.message}`);
     } finally {
@@ -667,75 +702,73 @@ async function loadMetroStations() {
 }
 
 async function showStaticRoute() {
-    const startId = document.getElementById('metroStartSelect')?.value;
-    const endId = document.getElementById('metroEndSelect')?.value;
+    const startId = document.getElementById("metroStartSelect")?.value;
+    const endId = document.getElementById("metroEndSelect")?.value;
 
-    if (!startId || !endId) {
-        return setResult('Choose start and end metro stations.');
+    if (!selectedBaseRouteData) {
+        return setResult("Choose a base metro route first.");
     }
 
-    if (!metroRouteDetailsCache.length) {
-        return setResult('Metro route data is not loaded yet.');
+    if (!startId || !endId) {
+        return setResult("Choose start and end metro stations.");
     }
 
     layers.paths.clearLayers();
 
-    let matchedRoute = null;
-    let slicedStops = [];
+    const routeGeo = metroNetworkRoutesCache.find(r =>
+        String(r.route_id) === String(selectedBaseRouteData.route.route_id)
+    );
 
-    for (const routeData of metroRouteDetailsCache) {
-        const stops = routeData.stops || [];
-        const startIndex = stops.findIndex(s => String(s.stop_id) === String(startId));
-        const endIndex = stops.findIndex(s => String(s.stop_id) === String(endId));
-
-        if (startIndex !== -1 && endIndex !== -1) {
-            matchedRoute = routeData;
-
-            if (startIndex <= endIndex) {
-                slicedStops = stops.slice(startIndex, endIndex + 1);
-            } else {
-                slicedStops = stops.slice(endIndex, startIndex + 1).reverse();
-            }
-            break;
+    if (routeGeo?.geojson) {
+        try {
+            const geom = JSON.parse(routeGeo.geojson);
+            L.geoJSON(geom, {
+                style: {
+                    color: "#7f8c8d",
+                    weight: 5,
+                    opacity: 0.85
+                }
+            }).addTo(layers.paths);
+        } catch (err) {
+            console.warn("Failed to draw static route geojson", err);
         }
     }
 
-    if (!matchedRoute || !slicedStops.length) {
-        return setResult('No static metro route found between the selected stations.');
+    const stops = selectedBaseRouteData.stops || [];
+    const startStop = stops.find(s => String(s.stop_id) === String(startId));
+    const endStop = stops.find(s => String(s.stop_id) === String(endId));
+
+    if (!startStop || !endStop) {
+        return setResult("Selected stops are not on the chosen route.");
     }
 
-    const latlngs = slicedStops.map(stop => [stop.stop_lat, stop.stop_lon]);
+    L.circleMarker([startStop.stop_lat, startStop.stop_lon], {
+        radius: 8,
+        color: "#27ae60",
+        weight: 2,
+        fillOpacity: 0.9
+    }).bindPopup(`<b>START</b><br>${startStop.stop_name}`).addTo(layers.paths);
 
-    L.polyline(latlngs, {
-        color: '#7f8c8d',
-        weight: 4,
-        opacity: 0.85
-    }).addTo(layers.paths);
+    L.circleMarker([endStop.stop_lat, endStop.stop_lon], {
+        radius: 8,
+        color: "#c0392b",
+        weight: 2,
+        fillOpacity: 0.9
+    }).bindPopup(`<b>END</b><br>${endStop.stop_name}`).addTo(layers.paths);
 
-    slicedStops.forEach((stop, i) => {
-        L.circleMarker([stop.stop_lat, stop.stop_lon], {
-            radius: 5,
-            color: '#7f8c8d',
-            weight: 2,
-            fillOpacity: 0.8
-        }).bindPopup(`${i + 1}. ${stop.stop_name}`).addTo(layers.paths);
-    });
+    const bounds = L.latLngBounds([
+        [startStop.stop_lat, startStop.stop_lon],
+        [endStop.stop_lat, endStop.stop_lon]
+    ]);
+    if (bounds.isValid()) map.fitBounds(bounds.pad(0.5));
 
-    const bounds = L.latLngBounds(latlngs);
-    if (bounds.isValid()) map.fitBounds(bounds);
-
-    let html = `<h4>Static Metro Route</h4>
-        <b>Line:</b> ${matchedRoute.route.route_short_name || matchedRoute.route.route_id}<br>
-        <b>Stops:</b> ${slicedStops.length}<br>
-        <h5>Stops in Order:</h5>`;
-
-    slicedStops.forEach((stop, i) => {
-        html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
-            ${i + 1}. <b>${stop.stop_name}</b>
-        </div>`;
-    });
-
-    setResult(html);
+    setResult(`
+        <h4>Static Metro Route</h4>
+        <b>Route:</b> ${selectedBaseRouteData.route.route_short_name || selectedBaseRouteData.route.route_id}<br>
+        <b>Start:</b> ${startStop.stop_name}<br>
+        <b>End:</b> ${endStop.stop_name}<br>
+        <i>The real route line is shown in gray, with start and end stations highlighted.</i>
+    `);
 }
 
 function syncMetroDropdownsToPathInputs() {
@@ -774,6 +807,9 @@ async function enrichPathStopsWithCoordinates(stops) {
 // Store current paths for comparison
 let currentBasePath = null;
 let currentComparePaths = [];
+
+// TSP variables
+let tspSelectedStops = [];
 
 async function showBaseRoute() {
     const { start, end } = getPathInputValues();
@@ -1022,71 +1058,46 @@ function displayPathInfo(pathObj) {
 
     setResult(html);
 }
+
 async function runTSP() {
-    const startId = document.getElementById('tspStartSelect')?.value?.trim();
-    const stopsInput = document.getElementById('tspStopsInput')?.value?.trim();
+    const startId = document.getElementById("tspStartSelect")?.value;
 
     if (!startId) {
-        return setResult('Please choose a starting station.');
+        return setResult("Choose a TSP start station.");
     }
 
-    if (!stopsInput) {
-        return setResult('Please enter at least one stop ID (comma-separated).');
+    if (!tspSelectedStops.length) {
+        return setResult("Add at least one stop for TSP.");
     }
 
-    const stopIds = stopsInput
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-    if (!stopIds.length) {
-        return setResult('Please enter at least one valid stop ID.');
-    }
-
-    if (stopIds.length > 20) {
-        return setResult('Maximum 20 stops allowed for TSP optimization.');
+    if (tspSelectedStops.length > 20) {
+        return setResult("Maximum 20 stops allowed for TSP.");
     }
 
     showSpinner(true);
     try {
         const query = new URLSearchParams();
-        query.append('start_id', startId);
-        stopIds.forEach(id => query.append('stop_ids', id));
+        query.append("start_id", startId);
+        tspSelectedStops.forEach(stop => query.append("stop_ids", stop.stop_id));
 
-        const res = await fetch(`${API_BASE_URL}/routes/tsp?${query.toString()}`);
-        if (!res.ok) {
-            const error = await res.text();
-            throw new Error(error || 'TSP calculation failed');
-        }
+        const data = await fetchJson(`${API_BASE_URL}/routes/tsp?${query.toString()}`);
 
-        const data = await res.json();
-
-        let html = `<h4>📍 TSP - Optimized Multi-Stop Route</h4>
-            <div style="padding: 8px; background: #e8f4f8; border-radius: 4px; margin-bottom: 10px;">
-                <b>Start Station:</b> (${startId})<br>
-                <b>Stops to Visit:</b> ${stopIds.length}<br>
-            </div>`;
-
-        if (data.stops && data.stops.length) {
-            html += `<h5>Selected Stops:</h5>`;
-            data.stops.forEach((stop, i) => {
-                html += `<div style="padding: 6px; background: #f9f9f9; border-left: 3px solid #3498db; margin: 4px 0; border-radius: 2px;">
-                    <b>${stop.stop_name}</b><br>
-                    <small style="color: #666;">ID: ${stop.stop_id}</small>
-                </div>`;
-            });
-        }
+        let html = `<h4>✓ TSP Optimized Route</h4>
+            <p style="font-size: 0.9em; color: #666; margin: 0 0 12px 0;">${tspSelectedStops.length} stops selected</p>`;
 
         if (data.order && data.order.length) {
-            html += `<hr><h5>✓ Recommended Visit Order:</h5>`;
+            html += `<h5>Optimal Visit Order:</h5>`;
             data.order.forEach((item, i) => {
-                html += `<div style="padding: 8px; background: #f0f8f0; border-left: 4px solid #27ae60; margin: 4px 0;">
-                    <b style="color: #27ae60;">${i + 1}.</b> Stop ID: ${item.node}
+                const stopData = data.stops?.find(s => String(s.vertex_id) === String(item.node));
+                const stopName = stopData ? stopData.stop_id : `Vertex ${item.node}`;
+                html += `<div style="padding: 8px; background: #f0f8f0; border-left: 3px solid #27ae60; margin: 4px 0; border-radius: 2px;">
+                    <b style="color: #27ae60;">${i + 1}.</b> ${escapeHtml(stopName)}
                 </div>`;
             });
-            html += `<p style="font-size: 0.85em; color: #666; margin-top: 8px;">
-                <i>This order minimizes total distance/cost.</i>
-            </p>`;
+        }
+
+        if (data.message) {
+            html += `<hr><p style="font-size: 0.85em; color: #666;">${data.message}</p>`;
         }
 
         setResult(html);
@@ -1095,6 +1106,92 @@ async function runTSP() {
     } finally {
         showSpinner(false);
     }
+}
+
+function addTspStop() {
+    const select = document.getElementById("tspStopSelect");
+    const stopId = select?.value;
+    const stopName = select?.options[select.selectedIndex]?.textContent || "";
+
+    if (!stopId) return;
+
+    if (tspSelectedStops.some(s => String(s.stop_id) === String(stopId))) {
+        return;
+    }
+
+    tspSelectedStops.push({
+        stop_id: stopId,
+        stop_name: stopName
+    });
+
+    renderTspSelectedStops();
+}
+
+function renderTspSelectedStops() {
+    const box = document.getElementById("tspSelectedStops");
+    if (!box) return;
+
+    if (!tspSelectedStops.length) {
+        box.innerHTML = "No TSP stops selected yet.";
+        return;
+    }
+
+    box.innerHTML = tspSelectedStops.map((stop, i) => `
+        <div style="padding:4px; border-bottom:1px solid #ddd;">
+            ${i + 1}. ${stop.stop_name}
+        </div>
+    `).join("");
+}
+
+function clearTspStops() {
+    tspSelectedStops = [];
+    renderTspSelectedStops();
+}
+
+function onBaseRouteChange() {
+    const routeId = document.getElementById("baseRouteSelect")?.value;
+    const startSelect = document.getElementById("metroStartSelect");
+    const endSelect = document.getElementById("metroEndSelect");
+    const tspStartSelect = document.getElementById("tspStartSelect");
+    const tspStopSelect = document.getElementById("tspStopSelect");
+
+    selectedBaseRouteData = metroRouteDetailsCache.find(r => String(r.route.route_id) === String(routeId)) || null;
+
+    const clearSelect = (sel, placeholder) => {
+        if (!sel) return;
+        sel.innerHTML = `<option value="">${placeholder}</option>`;
+    };
+
+    clearSelect(startSelect, "Choose start station...");
+    clearSelect(endSelect, "Choose end station...");
+    clearSelect(tspStartSelect, "Choose start station...");
+    clearSelect(tspStopSelect, "Choose stop...");
+
+    tspSelectedStops = [];
+    renderTspSelectedStops();
+
+    if (!selectedBaseRouteData) return;
+
+    const stops = selectedBaseRouteData.stops || [];
+    const seen = new Set();
+
+    stops.forEach(stop => {
+        const key = String(stop.stop_id);
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const label = `${stop.stop_name} (${stop.stop_id})`;
+
+        [startSelect, endSelect, tspStartSelect, tspStopSelect].forEach(sel => {
+            if (!sel) return;
+            const opt = document.createElement("option");
+            opt.value = stop.stop_id;
+            opt.textContent = label;
+            sel.appendChild(opt);
+        });
+    });
+
+    setResult(`Loaded ${(selectedBaseRouteData.stops || []).length} stops for selected metro route.`);
 }
 
 // ==================== ADVANCED ====================
