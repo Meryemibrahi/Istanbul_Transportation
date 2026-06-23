@@ -549,19 +549,25 @@ async function useCurrentMapWindow() {
 }
 
 async function showBusiestStops() {
-    const startHour = document.getElementById("busyStart")?.value || 6;
-    const endHour = document.getElementById("busyEnd")?.value || 9;
+    const date = document.getElementById("busyDate")?.value?.trim();
+    const startTime = document.getElementById("busyStart")?.value?.trim() || "06:00";
+    const endTime = document.getElementById("busyEnd")?.value?.trim() || "09:00";
+
+    if (!date) {
+        return setResult("Enter a date for busiest stops, for example 2023-05-02.");
+    }
 
     showSpinner(true);
     try {
         const data = await fetchJson(
-            `${API_BASE_URL}/spail-tools/busy?start_time=${encodeURIComponent(startHour)}&end_time=${encodeURIComponent(endHour)}`
+            `${API_BASE_URL}/spail-tools/busy?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&dateday=${encodeURIComponent(date)}`
         );
 
         layers.results.clearLayers();
 
         let html = `<h4>Busiest Stops</h4>
-            <b>Time range:</b> ${escapeHtml(startHour)}:00 - ${escapeHtml(endHour)}:00<br><hr>`;
+            <b>Date:</b> ${escapeHtml(date)}<br>
+            <b>Time range:</b> ${escapeHtml(startTime)} - ${escapeHtml(endTime)}<br><hr>`;
 
         data.forEach((stop, i) => {
             L.circleMarker([stop.stop_lat, stop.stop_lon], {
@@ -591,7 +597,59 @@ async function showBusiestStops() {
         showSpinner(false);
     }
 }
+async function devBusiestStops() {
+    const date = document.getElementById("devBusyDate")?.value?.trim();
+    const startTime = document.getElementById("devBusyStart")?.value?.trim() || "06:00";
+    const endTime = document.getElementById("devBusyEnd")?.value?.trim() || "09:00";
 
+    if (!date) {
+        return setResult("Advanced Busiest Stops: enter dateday first.");
+    }
+
+    showSpinner(true);
+    try {
+        const data = await fetchJson(
+            `${API_BASE_URL}/spail-tools/busy?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&dateday=${encodeURIComponent(date)}`
+        );
+
+        layers.results.clearLayers();
+
+        let html = `<h4>Advanced: Busiest Stops</h4>
+            <b>Date:</b> ${escapeHtml(date)}<br>
+            <b>Time range:</b> ${escapeHtml(startTime)} - ${escapeHtml(endTime)}<br>
+            <b>Returned:</b> ${data.length} stops<br><hr>`;
+
+        data.forEach((stop, i) => {
+            if (stop.stop_lat && stop.stop_lon) {
+                L.circleMarker([stop.stop_lat, stop.stop_lon], {
+                    radius: Math.max(5, Math.min(12, Number(stop.total_visits || 0) / 10)),
+                    color: "#9b59b6",
+                    weight: 1,
+                    fillOpacity: 0.75,
+                })
+                    .bindPopup(`${escapeHtml(stop.stop_name)}<br>Visits: ${stop.total_visits}`)
+                    .addTo(layers.results);
+            }
+
+            html += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+                ${i + 1}. <b>${escapeHtml(stop.stop_name || "Unknown stop")}</b><br>
+                Visits: ${escapeHtml(stop.total_visits ?? "N/A")} | Routes: ${escapeHtml(stop.unique_routes ?? "N/A")}
+            </div>`;
+        });
+
+        setResult(html);
+
+        const points = data.filter((s) => s.stop_lat && s.stop_lon);
+        if (points.length > 0) {
+            const bounds = L.latLngBounds(points.map((s) => [s.stop_lat, s.stop_lon]));
+            if (bounds.isValid()) map.fitBounds(bounds);
+        }
+    } catch (err) {
+        setResult(`Error: ${err.message}`);
+    } finally {
+        showSpinner(false);
+    }
+}
 // ==================== ROUTING ====================
 async function displayAllMetroRoutes() {
     if (!metroRouteDetailsCache.length) {
@@ -1312,7 +1370,15 @@ let mobilityCustomBounds = null;
 let mobilityAreaPicking = false;
 let mobilityAreaFirstCorner = null;
 let mobilityRouteLabelCache = new Map();
-const MOBILITY_VALID_DEMO_DATES = ["2023-05-02"];
+const MOBILITY_VALID_DEMO_DATES = [
+    "2023-05-02",
+    "2023-05-03",
+    "2023-05-01",
+    "2023-04-20",
+    "2023-04-21",
+    "2023-04-24",
+    "2023-04-19",
+];
 const MOBILITY_DEMO_CENTER = [41.01, 28.97];
 const MOBILITY_DEMO_ZOOM = 13;
 
@@ -1335,41 +1401,91 @@ function mobilityTimestamp(dateValue, timeValue) {
 }
 
 function initMobilityDateControls() {
+    populateMobilityDateDropdown();
+
     const preset = document.getElementById("mobilityDatePreset");
     const dateInput = document.getElementById("mobilityDate");
 
     if (preset && !preset.value) preset.value = MOBILITY_VALID_DEMO_DATES[0];
-    if (dateInput && !dateInput.value) dateInput.value = MOBILITY_VALID_DEMO_DATES[0];
-
-    if (preset && dateInput && preset.value !== "custom") {
-        dateInput.value = preset.value;
+    if (dateInput) {
+        dateInput.value = preset?.value && preset.value !== "custom" ? preset.value : MOBILITY_VALID_DEMO_DATES[0];
     }
 
+    updateMobilityDateHint();
     syncMobilityDateToAdvanced();
+}
+
+function populateMobilityDateDropdown() {
+    const preset = document.getElementById("mobilityDatePreset");
+    if (!preset) return;
+
+    const current = preset.value || MOBILITY_VALID_DEMO_DATES[0];
+    preset.innerHTML = "";
+
+    MOBILITY_VALID_DEMO_DATES.forEach((date) => {
+        const option = document.createElement("option");
+        option.value = date;
+        option.textContent = date;
+        preset.appendChild(option);
+    });
+
+    const custom = document.createElement("option");
+    custom.value = "custom";
+    custom.textContent = "Custom date...";
+    preset.appendChild(custom);
+
+    preset.value = MOBILITY_VALID_DEMO_DATES.includes(current) ? current : MOBILITY_VALID_DEMO_DATES[0];
 }
 
 function onMobilityDatePresetChange() {
     const preset = document.getElementById("mobilityDatePreset");
     const dateInput = document.getElementById("mobilityDate");
-    const hint = document.getElementById("mobilityDateHint");
-
     if (!preset || !dateInput) return;
 
     if (preset.value === "custom") {
         dateInput.disabled = false;
         dateInput.focus();
-        if (hint) hint.innerHTML = "Custom date enabled. Make sure this date exists in <code>trips_mdb</code>; otherwise the trip dropdown will stay empty.";
     } else {
         dateInput.disabled = false;
         dateInput.value = preset.value;
-        if (hint) hint.innerHTML = `Using valid demo date <b>${escapeHtml(preset.value)}</b>.`;
     }
 
+    resetMobilityTripSelectionForNewDate();
+    updateMobilityDateHint();
+    syncMobilityDateToAdvanced();
+}
+
+function onMobilityDateInputChange() {
+    const preset = document.getElementById("mobilityDatePreset");
+    const dateInput = document.getElementById("mobilityDate");
+    if (!dateInput) return;
+
+    if (preset) {
+        preset.value = MOBILITY_VALID_DEMO_DATES.includes(dateInput.value) ? dateInput.value : "custom";
+    }
+
+    resetMobilityTripSelectionForNewDate();
+    updateMobilityDateHint();
+    syncMobilityDateToAdvanced();
+}
+
+function updateMobilityDateHint() {
+    const hint = document.getElementById("mobilityDateHint");
+    const date = getMobilitySelectedDate();
+    if (!hint) return;
+
+    if (MOBILITY_VALID_DEMO_DATES.includes(date)) {
+        hint.innerHTML = `Using valid MobilityDB date <b>${escapeHtml(date)}</b>. If no trips appear, choose a smaller area around Istanbul.`;
+    } else {
+        hint.innerHTML = `Custom date <b>${escapeHtml(date)}</b> is not in the known valid list. The trip dropdown may stay empty unless this date exists in <code>trips_mdb</code>.`;
+    }
+}
+
+function resetMobilityTripSelectionForNewDate() {
     mobilityTripsCache = [];
     mobilitySelectedTrip = null;
     fillMobilityTripSelect();
     updateMobilitySelectedTripInfo();
-    syncMobilityDateToAdvanced();
 }
 
 function getMobilitySelectedDate() {
@@ -1387,8 +1503,8 @@ function syncMobilityDateToAdvanced() {
     const devPos = document.getElementById("devMobPositionTs");
 
     if (devDate) devDate.value = date;
-    if (devStart && !devStart.value) devStart.value = `${date} 08:00:00+03`;
-    if (devEnd && !devEnd.value) devEnd.value = `${date} 08:30:00+03`;
+    if (devStart) devStart.value = `${date} 08:00:00+03`;
+    if (devEnd) devEnd.value = `${date} 08:30:00+03`;
     if (devPos) devPos.value = `${date} ${time}:00+03`;
 }
 
@@ -1987,271 +2103,7 @@ async function showMobilityPositionAtTime() {
     }
 }
 
-// Backward-compatible names in case old buttons still exist somewhere.
 function loadMobilityCurrentWindow() { return findMobilityTripsInArea(); }
 function loadMobilityTrajectories() { return showSelectedMobilityTrajectory(); }
 function loadMobilityAtTime() { return showMobilityPositionAtTime(); }
 function loadMobilityWindow() { return findMobilityTripsInArea(); }
-
-
-// ==================== ADVANCED DEVELOPER RAW TESTS ====================
-// These functions keep the public tabs user-friendly, while the Advanced tab can still test raw backend endpoints.
-
-function devValue(id, fallback = "") {
-    const value = document.getElementById(id)?.value?.trim();
-    return value || fallback;
-}
-
-function devRequire(id, message) {
-    const value = devValue(id);
-    if (!value) {
-        setResult(message);
-        return null;
-    }
-    return value;
-}
-
-function devShowRaw(title, url, data) {
-    const safeUrl = escapeHtml(url);
-    const safeJson = escapeHtml(JSON.stringify(data, null, 2));
-    setResult(`
-        <h4>${escapeHtml(title)}</h4>
-        <small><b>Endpoint:</b> ${safeUrl}</small>
-        <pre style="white-space: pre-wrap; max-height: 360px; overflow: auto; background: #f4f6f8; padding: 8px; border-radius: 6px; margin-top: 8px;">${safeJson}</pre>
-    `);
-}
-
-function devGetRows(data) {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data.stops)) return data.stops;
-    if (Array.isArray(data.routes)) return data.routes;
-    if (Array.isArray(data.positions)) return data.positions;
-    return [data];
-}
-
-function devExtractPoint(row) {
-    if (!row) return null;
-
-    if (typeof extractLatLonFromMobilityRow === "function") {
-        const mobilityPoint = extractLatLonFromMobilityRow(row);
-        if (mobilityPoint) return mobilityPoint;
-    }
-
-    const lat = row.stop_lat ?? row.lat ?? row.latitude;
-    const lon = row.stop_lon ?? row.lon ?? row.longitude;
-    if (lat !== undefined && lon !== undefined && lat !== null && lon !== null) {
-        const nLat = Number(lat);
-        const nLon = Number(lon);
-        if (!Number.isNaN(nLat) && !Number.isNaN(nLon)) return { lat: nLat, lon: nLon };
-    }
-
-    return null;
-}
-
-function devDrawPointRows(data, popupTitle = "Result") {
-    const rows = devGetRows(data);
-    const points = rows
-        .map((row, index) => ({ row, index, point: devExtractPoint(row) }))
-        .filter(item => item.point);
-
-    if (!points.length) return;
-
-    points.forEach(({ row, index, point }) => {
-        const name = row.stop_name || row.trip_id || row.route_id || `${popupTitle} ${index + 1}`;
-        L.circleMarker([point.lat, point.lon], {
-            radius: 7,
-            color: "#34495e",
-            weight: 2,
-            fillOpacity: 0.8,
-        })
-            .bindPopup(`<b>${escapeHtml(name)}</b><br>Lat: ${point.lat}<br>Lon: ${point.lon}`)
-            .addTo(layers.results);
-    });
-
-    const bounds = L.latLngBounds(points.map(item => [item.point.lat, item.point.lon]));
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
-}
-
-function devDrawAnimatedResponse(data) {
-    const rows = Array.isArray(data) ? data : [data];
-    const row = rows.find(r => Array.isArray(r.positions) && r.positions.length) || rows[0];
-    const positions = (row?.positions || [])
-        .map(p => ({ lat: Number(p.lat), lon: Number(p.lon), time: p.time }))
-        .filter(p => !Number.isNaN(p.lat) && !Number.isNaN(p.lon));
-
-    if (!positions.length) return;
-
-    const latlngs = positions.map(p => [p.lat, p.lon]);
-    L.polyline(latlngs, { color: "#8e44ad", weight: 4, opacity: 0.85 }).addTo(layers.results);
-    L.circleMarker(latlngs[0], { radius: 7, color: "#27ae60", weight: 2, fillOpacity: 0.9 })
-        .bindPopup(`<b>Start</b><br>${escapeHtml(positions[0].time || "")}`)
-        .addTo(layers.results);
-    L.circleMarker(latlngs[latlngs.length - 1], { radius: 7, color: "#c0392b", weight: 2, fillOpacity: 0.9 })
-        .bindPopup(`<b>End</b><br>${escapeHtml(positions[positions.length - 1].time || "")}`)
-        .addTo(layers.results);
-
-    const bounds = L.latLngBounds(latlngs);
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
-}
-
-async function devFetchAndShow(title, path, drawMode = "points") {
-    const url = `${API_BASE_URL}${path}`;
-    showSpinner(true);
-    layers.results.clearLayers();
-    try {
-        const data = await fetchJson(url);
-        if (drawMode === "animated") devDrawAnimatedResponse(data);
-        else if (drawMode === "points") devDrawPointRows(data, title);
-        devShowRaw(title, path, data);
-    } catch (err) {
-        setResult(`<h4>${escapeHtml(title)} failed</h4>${escapeHtml(err.message)}`);
-    } finally {
-        showSpinner(false);
-    }
-}
-
-async function devGetStopById() {
-    const stopId = devRequire("devStopId", "Enter a Stop ID first.");
-    if (!stopId) return;
-    return devFetchAndShow("GET Stop by ID", `/explorer/${encodeURIComponent(stopId)}`, "points");
-}
-
-async function devGetStopByCode() {
-    const code = devRequire("devStopCode", "Enter a Stop Code first.");
-    if (!code) return;
-    return devFetchAndShow("GET Stop by Code", `/advanced/${encodeURIComponent(code)}`, "points");
-}
-
-async function devShowRouteById() {
-    const routeId = devRequire("devRouteId", "Enter a Route ID first.");
-    if (!routeId) return;
-    return devFetchAndShow("GET Route by ID", `/explorer/route/${encodeURIComponent(routeId)}`, "points");
-}
-
-async function devLoadTopRoutes() {
-    const limit = devValue("devTopRoutesLimit", "10");
-    return devFetchAndShow("GET Top Routes", `/advanced/top-routes?limit=${encodeURIComponent(limit)}`, "none");
-}
-
-async function devRunDijkstra() {
-    const start = devRequire("devPathStart", "Enter the Start Stop ID first.");
-    const end = devRequire("devPathEnd", "Enter the End Stop ID first.");
-    if (!start || !end) return;
-    return devFetchAndShow("GET Dijkstra", `/routes/dijkstra?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`, "none");
-}
-
-async function devRunAStar() {
-    const start = devRequire("devPathStart", "Enter the Start Stop ID first.");
-    const end = devRequire("devPathEnd", "Enter the End Stop ID first.");
-    if (!start || !end) return;
-    return devFetchAndShow("GET A*", `/routes/astar?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`, "none");
-}
-
-async function devNearestStops() {
-    const lat = devRequire("devNearLat", "Enter latitude first.");
-    const lon = devRequire("devNearLon", "Enter longitude first.");
-    const radius = devValue("devNearRadius", "500");
-    if (!lat || !lon) return;
-    return devFetchAndShow("GET Nearest Stops", `/spail-tools/nearest?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`, "points");
-}
-
-function devFillAreaFromCurrentMap() {
-    const b = map.getBounds();
-    document.getElementById("devMinLon").value = b.getWest().toFixed(6);
-    document.getElementById("devMinLat").value = b.getSouth().toFixed(6);
-    document.getElementById("devMaxLon").value = b.getEast().toFixed(6);
-    document.getElementById("devMaxLat").value = b.getNorth().toFixed(6);
-    setResult("Spatial area fields were filled from the current map view.");
-}
-
-async function devStopsInArea() {
-    const minLon = devRequire("devMinLon", "Enter min longitude first, or press Fill Current Map Bounds.");
-    const minLat = devRequire("devMinLat", "Enter min latitude first, or press Fill Current Map Bounds.");
-    const maxLon = devRequire("devMaxLon", "Enter max longitude first, or press Fill Current Map Bounds.");
-    const maxLat = devRequire("devMaxLat", "Enter max latitude first, or press Fill Current Map Bounds.");
-    if (!minLon || !minLat || !maxLon || !maxLat) return;
-    return devFetchAndShow("GET Stops in Area", `/spail-tools/inarea?min_lat=${encodeURIComponent(minLat)}&max_lat=${encodeURIComponent(maxLat)}&min_lon=${encodeURIComponent(minLon)}&max_lon=${encodeURIComponent(maxLon)}`, "points");
-}
-
-async function devBusiestStops() {
-    const startHour = devValue("devBusyStart", "6");
-    const endHour = devValue("devBusyEnd", "9");
-    return devFetchAndShow("GET Busiest Stops", `/spail-tools/busy?start_time=${encodeURIComponent(startHour)}&end_time=${encodeURIComponent(endHour)}`, "points");
-}
-
-function devFillMobilityBoundsFromCurrentMap() {
-    const b = map.getBounds();
-    document.getElementById("devMobMinLon").value = b.getWest().toFixed(6);
-    document.getElementById("devMobMinLat").value = b.getSouth().toFixed(6);
-    document.getElementById("devMobMaxLon").value = b.getEast().toFixed(6);
-    document.getElementById("devMobMaxLat").value = b.getNorth().toFixed(6);
-    setResult("MobilityDB area fields were filled from the current map view.");
-}
-
-function devApplyMobilityDemoDate() {
-    const date = getMobilitySelectedDate() || MOBILITY_VALID_DEMO_DATES[0];
-    const time = document.getElementById("mobilityPositionTime")?.value || "08:15";
-
-    const devDate = document.getElementById("devMobilityDate");
-    const devStart = document.getElementById("devMobilityStartTs");
-    const devEnd = document.getElementById("devMobilityEndTs");
-    const devPos = document.getElementById("devMobPositionTs");
-
-    if (devDate) devDate.value = date;
-    if (devStart) devStart.value = `${date} 08:00:00+03`;
-    if (devEnd) devEnd.value = `${date} 08:30:00+03`;
-    if (devPos) devPos.value = `${date} ${time}:00+03`;
-
-    setResult(`Advanced MobilityDB test fields were filled with valid demo date ${date}.`);
-}
-
-async function devMobilityAllPositionsAtTime() {
-    const date = devRequire("devMobilityDate", "Enter date first, for example 2023-05-02.");
-    const startTs = devRequire("devMobilityStartTs", "Enter start timestamp first.");
-    const endTs = devRequire("devMobilityEndTs", "Enter end timestamp first.");
-    if (!date || !startTs || !endTs) return;
-
-    const ok = confirm(
-        "This raw endpoint can be slow on the full MobilityDB table. For the demo, use the smaller trips_mdb table or a short time range. Continue?"
-    );
-    if (!ok) return;
-
-    return devFetchAndShow(
-        "GET All Vehicle Positions at Time",
-        `/mobilitydb/all_vehicle_positions_at_time?date=${encodeURIComponent(date)}&start_timestamp=${encodeURIComponent(startTs)}&end_timestamp=${encodeURIComponent(endTs)}`,
-        "points"
-    );
-}
-
-async function devMobilityTripsInArea() {
-    const minLon = devRequire("devMobMinLon", "Enter min longitude first, or press Fill Current Map Bounds.");
-    const minLat = devRequire("devMobMinLat", "Enter min latitude first, or press Fill Current Map Bounds.");
-    const maxLon = devRequire("devMobMaxLon", "Enter max longitude first, or press Fill Current Map Bounds.");
-    const maxLat = devRequire("devMobMaxLat", "Enter max latitude first, or press Fill Current Map Bounds.");
-    const date = devRequire("devMobilityDate", "Enter date first, for example 2023-05-02.");
-    if (!minLon || !minLat || !maxLon || !maxLat || !date) return;
-    return devFetchAndShow(
-        "GET Trips in Area",
-        `/mobilitydb/trips_in_area?min_lon=${encodeURIComponent(minLon)}&min_lat=${encodeURIComponent(minLat)}&max_lon=${encodeURIComponent(maxLon)}&max_lat=${encodeURIComponent(maxLat)}&date=${encodeURIComponent(date)}`,
-        "none"
-    );
-}
-
-async function devMobilityAnimatedPositions() {
-    const tripId = devRequire("devMobTripId", "Enter Trip ID first.");
-    if (!tripId) return;
-    return devFetchAndShow("GET Animated Positions", `/mobilitydb/animated_vehicle_positions?trip_id=${encodeURIComponent(tripId)}`, "animated");
-}
-
-async function devMobilityPositionAtTime() {
-    const tripId = devRequire("devMobTripId", "Enter Trip ID first.");
-    const timestamp = devRequire("devMobPositionTs", "Enter timestamp first.");
-    if (!tripId || !timestamp) return;
-    return devFetchAndShow(
-        "GET Vehicle Position at Time",
-        `/mobilitydb/vehicle_position_at_time?trip_id=${encodeURIComponent(tripId)}&timestamp=${encodeURIComponent(timestamp)}`,
-        "points"
-    );
-}
-
