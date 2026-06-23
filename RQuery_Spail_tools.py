@@ -2,7 +2,9 @@
 Done!
 '''
 from typing import List, Dict, Any
+from datetime import date
 from database_Creation import execute_query
+
 
 
 def get_stops_by_area(min_lat: float, max_lat: float, min_lon: float, max_lon: float) -> List[Dict[str, Any]]:
@@ -38,21 +40,24 @@ def get_stops_near(lat: float, lon: float, radius: int = 500) -> List[Dict[str, 
     point = f"POINT({lon} {lat})"
     return execute_query(query, (point, point, radius))
 
-def get_busy_stops(hour1: int, hour2: int) -> List[Dict[str, Any]]:
+def get_busy_stops(hour1: int, hour2: int, dateday: date) -> List[Dict[str, Any]]:
     query = """
         SELECT
-            s.stop_id,
-            s.stop_name,
-            s.stop_lat,
-            s.stop_lon,
-            COUNT(DISTINCT st.trip_id) AS total_visits,
-            COUNT(DISTINCT t.route_id) AS unique_routes
-        FROM stop_times st
-        JOIN stops s ON st.stop_id = s.stop_id
-        JOIN trips t ON st.trip_id = t.trip_id
-        WHERE CAST(SPLIT_PART(st.arrival_time, ':', 1) AS INTEGER) >= %s AND CAST(SPLIT_PART(st.arrival_time, ':', 1) AS INTEGER) < %s
-        GROUP BY s.stop_id, s.stop_name, s.stop_lat, s.stop_lon
-        ORDER BY total_visits DESC
-        LIMIT 20;
+    s.stop_id,
+    s.stop_name,
+    s.stop_lat,
+    s.stop_lon,
+    COUNT(DISTINCT st.trip_id) AS total_visits,
+    COUNT(DISTINCT t.route_id) AS unique_routes
+    FROM stop_times st
+    JOIN stops s ON st.stop_id = s.stop_id
+    JOIN trips t ON st.trip_id = t.trip_id
+    JOIN service_dates sd ON t.service_id = sd.service_id 
+    WHERE CAST(SPLIT_PART(st.arrival_time, ':', 1) AS INTEGER) >= %s 
+    AND CAST(SPLIT_PART(st.arrival_time, ':', 1) AS INTEGER) < %s
+    AND sd.date = %s 
+    GROUP BY s.stop_id, s.stop_name, s.stop_lat, s.stop_lon
+    ORDER BY total_visits DESC
+    LIMIT 20;
     """
-    return execute_query(query, (hour1, hour2))
+    return execute_query(query, (hour1, hour2, dateday))

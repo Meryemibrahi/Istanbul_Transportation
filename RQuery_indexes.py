@@ -16,7 +16,13 @@ def create_gtfs_indexes(conn):
         "CREATE INDEX IF NOT EXISTS transit_edges_geom_gix ON transit_edges USING GIST (geom);",
         "CREATE INDEX IF NOT EXISTS transit_edges_from_stop_idx ON transit_edges(from_stop_id);",
         "CREATE INDEX IF NOT EXISTS transit_edges_to_stop_idx ON transit_edges(to_stop_id);",
-        "CREATE INDEX IF NOT EXISTS stop_vertices_geom_gix ON stop_vertices USING GIST (geom);"
+        "CREATE INDEX IF NOT EXISTS stop_vertices_geom_gix ON stop_vertices USING GIST (geom);",
+        "CREATE INDEX IF NOT EXISTS idx_service_dates_service_id ON service_dates(service_id);",
+        "CREATE INDEX IF NOT EXISTS idx_service_dates_date ON service_dates(date);",
+        "CREATE INDEX IF NOT EXISTS idx_trips_mdb_date ON trips_mdb(date);",
+        "CREATE INDEX IF NOT EXISTS idx_stop_times_trip_id ON stop_times(trip_id);",
+        "CREATE INDEX IF NOT EXISTS idx_stop_times_stop_id ON stop_times(stop_id);",
+        "CREATE INDEX IF NOT EXISTS idx_trip_segs_shape_id ON trip_segs(shape_id);"
     ]
 
     with conn.cursor() as cur:

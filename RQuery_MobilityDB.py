@@ -1,7 +1,6 @@
 from typing import List, Dict, Any
 from database_Creation import execute_query
 
-
 def get_vehicle_position_at_time(trip_id: str, timestamp: str) -> List[Dict[str, Any]]:
     query = """
         SELECT valueAtTimestamp(trip, %s) AS position
@@ -10,11 +9,18 @@ def get_vehicle_position_at_time(trip_id: str, timestamp: str) -> List[Dict[str,
     """
     return execute_query(query, (timestamp, trip_id))
 
-def get_vehicle_speed(trip_id: str) -> List[Dict[str, Any]]:
+def animated_vehicle_positions(trip_id: str) -> List[Dict[str, Any]]:
     query = """
-        SELECT trip_id, speed(trip) AS speed_m_per_s
-        FROM trips_mdb
-        WHERE trip_id = %s;
+        SELECT trip_id,
+            json_agg(json_build_object(
+                'time', getTimestamp(inst),
+                'lon', ST_X(getValue(inst)::geometry),
+                'lat', ST_Y(getValue(inst)::geometry)
+            ) ORDER BY getTimestamp(inst)) AS positions
+        FROM trips_mdb,
+            LATERAL unnest(instants(trip)) AS inst
+        WHERE trip_id = %s
+        GROUP BY trip_id;
     """
     return execute_query(query, (trip_id,))
 
@@ -26,19 +32,27 @@ def get_distance_traveled(trip_id: str) -> List[Dict[str, Any]]:
     """
     return execute_query(query, (trip_id,))
 
-def get_trips_in_area(min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> List[Dict[str, Any]]:
+def get_trips_in_area(min_lon: float, min_lat: float, max_lon: float, max_lat: float, date: str) -> List[Dict[str, Any]]:
     query = """
         SELECT trip_id, route_id
         FROM trips_mdb
-        WHERE ST_Intersects(trajectory(trip), ST_MakeEnvelope(%s, %s, %s, %s, 4326));
+        WHERE ST_Intersects(
+            trajectory(atTime(trip, tstzspan(%s, %s, true, true))),
+            ST_MakeEnvelope(%s, %s, %s, %s, 4326)
+        )
+        AND date = %s;
     """
-    return execute_query(query, (min_lon, min_lat, max_lon, max_lat))
+    return execute_query(query, (min_lon, min_lat, max_lon, max_lat, date))
 
-def get_vehicle_positions_over_time(trip_id: str, start_time: str, end_time: str) -> List[Dict[str, Any]]:
+def get_all_vehicle_positions_at_time(date: str, start_timestamp: str, end_timestamp: str) -> List[Dict[str, Any]]:
     query = """
         SELECT trip_id, route_id,
-            unnest(instants(atTime(trip, tstzspan(%s, %s)))) AS position
+        ST_X(valueAtTimestamp(trip, %s)::geometry) AS lon,
+        ST_Y(valueAtTimestamp(trip, %s)::geometry) AS lat
         FROM trips_mdb
-        WHERE trip_id = %s;
+        WHERE trip && %s::timestamptz
+        AND date = %s;
     """
-    return execute_query(query, (start_time, end_time, trip_id))
+    return execute_query(query, (date, start_timestamp, end_timestamp))
+
+
