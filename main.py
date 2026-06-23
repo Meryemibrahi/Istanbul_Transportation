@@ -25,6 +25,7 @@ from Ra_explorer import router as explorer
 from Ra_routing import router as routes
 from Ra_Spail_tools import router as spail_tools
 from Ra_advanced import router as advanced
+from Ra_mobilityDB import router as mobilitydb
 
 load_dotenv()
 
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI):
         test_database_connection()
         logger.info("Database connection successful")
         logger.info("Loading GTFS data...")
-        #load_gtfs_data()
+        # load_gtfs_data()
         logger.info("GTFS data loaded successfully")
     except Exception as e:
         logger.error(f"Startup failed: {e}")
@@ -67,6 +68,7 @@ app.include_router(explorer, prefix="/explorer")
 app.include_router(routes, prefix="/routes")
 app.include_router(spail_tools, prefix="/spail-tools")
 app.include_router(advanced, prefix="/advanced")
+app.include_router(mobilitydb, prefix="/mobilitydb")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

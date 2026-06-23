@@ -83,3 +83,72 @@ def add_time_to_seconds_function():
         END
     $$ LANGUAGE sql IMMUTABLE;
     """
+
+def add_route_types_table():
+    return """
+    DROP TABLE IF EXISTS route_types;
+
+    CREATE TABLE route_types (
+        route_type INTEGER PRIMARY KEY,
+        type_name VARCHAR(50) NOT NULL,
+        description TEXT
+    );
+
+    INSERT INTO route_types (route_type, type_name, description)
+    VALUES
+        (0, 'Tram', 'Tram, streetcar, or light rail.'),
+        (1, 'Subway / Metro', 'Underground rail system within a metropolitan area.'),
+        (2, 'Rail', 'Intercity or long-distance rail service.'),
+        (3, 'Bus', 'Short- or long-distance bus service.'),
+        (4, 'Ferry', 'Short- or long-distance boat service.'),
+        (5, 'Cable tram', 'Street-level rail cars pulled by an underground cable.'),
+        (6, 'Aerial lift', 'Cabins or chairs suspended from cables.'),
+        (7, 'Funicular', 'Rail system designed for steep inclines.'),
+        (9, 'Minibus', 'Minibus transportation service.'),
+        (10, 'Taxi Minibus', 'Shared taxi or taxi-minibus service.'),
+        (11, 'Trolleybus', 'Electric bus powered through overhead wires.'),
+        (12, 'Monorail', 'Rail system operating on a single rail or beam.');
+
+    ALTER TABLE routes
+    ADD CONSTRAINT fk_routes_route_type
+    FOREIGN KEY (route_type) REFERENCES route_types(route_type);
+    """
+
+def create_shape_geoms_table():
+    return """
+    UPDATE shapes
+    SET shape_id = regexp_replace(shape_id, '\.0+$', '')
+    WHERE shape_id ~ '\.0+$';
+
+    DROP TABLE IF EXISTS shape_geoms CASCADE;
+    CREATE TABLE shape_geoms AS
+    SELECT
+        shape_id,
+        ST_MakeLine(ST_SetSRID(ST_MakePoint(shape_pt_lon, shape_pt_lat), 4326) ORDER BY shape_pt_sequence) AS geom
+    FROM shapes
+    GROUP BY shape_id;
+    ALTER TABLE shape_geoms ADD PRIMARY KEY (shape_id);
+    """
+
+def create_location_types_table():
+    return """
+    DROP TABLE IF EXISTS location_types;
+
+    CREATE TABLE location_types (
+        location_type INTEGER PRIMARY KEY,
+        type_name VARCHAR(50) NOT NULL,
+        description TEXT
+    );
+
+    INSERT INTO location_types (location_type, type_name, description)
+    VALUES
+        (0, 'Stop', 'A stop or station.'),
+        (1, 'Station', 'A station.'),
+        (2, 'Entrance/Exit', 'An entrance/exit point to a station.'),
+        (3, 'Generic Node', 'A generic node in a network.'),
+        (4, 'Boarding Area', 'A specific boarding area within a station.');
+    
+    ALTER TABLE stops
+    ADD CONSTRAINT fk_stops_location_type
+    FOREIGN KEY (location_type) REFERENCES location_types(location_type);
+    """

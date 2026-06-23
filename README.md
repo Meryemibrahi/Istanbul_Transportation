@@ -8,9 +8,6 @@ This project is a **GTFS-based public transportation query portal** built with:
 - **MobilityDB** for trajectory and spatio-temporal queries
 - **Leaflet + OpenStreetMap** for the frontend map
 
-This guide explains how to prepare and run the project from scratch on another PC.
-
----
 
 ## 1. What is included
 

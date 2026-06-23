@@ -24,13 +24,13 @@ def get_stops_near(lat: float, lon: float, radius: int = 500) -> List[Dict[str, 
                zone_id, stop_url, location_type, parent_station,
                stop_timezone, wheelchair_boarding,
                ST_Distance(
-                   ST_Transform(ST_SetSRID(ST_MakePoint(stop_lon, stop_lat), 4326), 3857),
-                   ST_Transform(ST_GeomFromText(%s, 4326), 3857)
+                   ST_Transform(ST_SetSRID(ST_MakePoint(stop_lon, stop_lat), 4326), 32635 ),
+                   ST_Transform(ST_GeomFromText(%s, 4326), 32635 )
                )::numeric AS distance_m
         FROM stops
         WHERE ST_DWithin(
-            ST_Transform(ST_SetSRID(ST_MakePoint(stop_lon, stop_lat), 4326), 3857),
-            ST_Transform(ST_GeomFromText(%s, 4326), 3857),
+            ST_Transform(ST_SetSRID(ST_MakePoint(stop_lon, stop_lat), 4326), 32635 ),
+            ST_Transform(ST_GeomFromText(%s, 4326), 32635 ),
             %s
         )
         ORDER BY distance_m ASC

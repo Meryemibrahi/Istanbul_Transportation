@@ -27,10 +27,10 @@ def create_gtfs_indexes(conn):
 
 def enable_postgres_extensions(conn):
     queries = [
+        "SET client_encoding = 'WIN1254';",
         "CREATE EXTENSION IF NOT EXISTS postgis;",
-        "CREATE EXTENSION IF NOT EXISTS pgrouting;"
-        "CREATE EXTENSION IF NOT EXISTS mobility;"
-        "CREATE EXTENSION IF NOT EXISTS mobilityDB;"
+        "CREATE EXTENSION IF NOT EXISTS pgrouting;",
+        "CREATE EXTENSION IF NOT EXISTS mobilitydb;"
     ]
 
     with conn.cursor() as cur:
