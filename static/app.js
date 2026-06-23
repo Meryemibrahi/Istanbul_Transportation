@@ -1296,27 +1296,962 @@ async function loadTopRoutes() {
     }
 }
 
-// ==================== MOBILITY PLACEHOLDERS ====================
-// The current backend in this project version does not expose mobility endpoints.
-// These placeholders prevent frontend crashes and clearly inform the user.
+// ==================== MOBILITYDB USER-FRIENDLY FRONTEND ====================
+// Normal user flow:
+// 1) Select a small map area
+// 2) Find trips for one service date
+// 3) Select a readable trip result
+// 4) Animate movement or show position at time
+// Heavy endpoint /all_vehicle_positions_at_time is intentionally kept for Advanced tab only.
 
-function setMobilityTimePreset(value) {
-    const input = document.getElementById("mobilityTime");
-    if (input) input.value = value;
+let mobilityTripsCache = [];
+let mobilitySelectedTrip = null;
+let mobilityAnimationTimer = null;
+let mobilityMovingMarker = null;
+let mobilityCustomBounds = null;
+let mobilityAreaPicking = false;
+let mobilityAreaFirstCorner = null;
+let mobilityRouteLabelCache = new Map();
+const MOBILITY_VALID_DEMO_DATES = ["2023-05-02"];
+const MOBILITY_DEMO_CENTER = [41.01, 28.97];
+const MOBILITY_DEMO_ZOOM = 13;
+
+function initMobilityTools() {
+    if (!map) return;
+    map.on("click", handleMobilityAreaClick);
+    map.on("moveend zoomend", refreshMobilityAreaHint);
+    initMobilityDateControls();
+    refreshMobilityAreaHint();
 }
 
-function loadMobilityTrajectories() {
-    setResult("Mobility endpoints are not available in this backend version yet.");
+document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(initMobilityTools, 150);
+});
+
+function mobilityTimestamp(dateValue, timeValue) {
+    if (!dateValue || !timeValue) return "";
+    const cleanTime = timeValue.length === 5 ? `${timeValue}:00` : timeValue;
+    return `${dateValue} ${cleanTime}+03`;
 }
 
-function loadMobilityAtTime() {
-    setResult("Mobility endpoints are not available in this backend version yet.");
+function initMobilityDateControls() {
+    const preset = document.getElementById("mobilityDatePreset");
+    const dateInput = document.getElementById("mobilityDate");
+
+    if (preset && !preset.value) preset.value = MOBILITY_VALID_DEMO_DATES[0];
+    if (dateInput && !dateInput.value) dateInput.value = MOBILITY_VALID_DEMO_DATES[0];
+
+    if (preset && dateInput && preset.value !== "custom") {
+        dateInput.value = preset.value;
+    }
+
+    syncMobilityDateToAdvanced();
 }
 
-function loadMobilityCurrentWindow() {
-    setResult("Mobility endpoints are not available in this backend version yet.");
+function onMobilityDatePresetChange() {
+    const preset = document.getElementById("mobilityDatePreset");
+    const dateInput = document.getElementById("mobilityDate");
+    const hint = document.getElementById("mobilityDateHint");
+
+    if (!preset || !dateInput) return;
+
+    if (preset.value === "custom") {
+        dateInput.disabled = false;
+        dateInput.focus();
+        if (hint) hint.innerHTML = "Custom date enabled. Make sure this date exists in <code>trips_mdb</code>; otherwise the trip dropdown will stay empty.";
+    } else {
+        dateInput.disabled = false;
+        dateInput.value = preset.value;
+        if (hint) hint.innerHTML = `Using valid demo date <b>${escapeHtml(preset.value)}</b>.`;
+    }
+
+    mobilityTripsCache = [];
+    mobilitySelectedTrip = null;
+    fillMobilityTripSelect();
+    updateMobilitySelectedTripInfo();
+    syncMobilityDateToAdvanced();
 }
 
-function loadMobilityWindow() {
-    setResult("Mobility endpoints are not available in this backend version yet.");
+function getMobilitySelectedDate() {
+    const dateInput = document.getElementById("mobilityDate");
+    return dateInput?.value || MOBILITY_VALID_DEMO_DATES[0];
 }
+
+function syncMobilityDateToAdvanced() {
+    const date = getMobilitySelectedDate();
+    const time = document.getElementById("mobilityPositionTime")?.value || "08:15";
+
+    const devDate = document.getElementById("devMobilityDate");
+    const devStart = document.getElementById("devMobilityStartTs");
+    const devEnd = document.getElementById("devMobilityEndTs");
+    const devPos = document.getElementById("devMobPositionTs");
+
+    if (devDate) devDate.value = date;
+    if (devStart && !devStart.value) devStart.value = `${date} 08:00:00+03`;
+    if (devEnd && !devEnd.value) devEnd.value = `${date} 08:30:00+03`;
+    if (devPos) devPos.value = `${date} ${time}:00+03`;
+}
+
+function zoomToMobilityDemoArea() {
+    if (!map) return;
+    mobilityCustomBounds = null;
+    mobilityAreaPicking = false;
+    mobilityAreaFirstCorner = null;
+    map.setView(MOBILITY_DEMO_CENTER, MOBILITY_DEMO_ZOOM);
+    layers.results.clearLayers();
+    setTimeout(() => {
+        const bounds = map.getBounds();
+        drawMobilitySearchArea(bounds);
+        refreshMobilityAreaHint();
+    }, 200);
+    setResult(`
+        <h4>Demo area selected</h4>
+        The map moved to the Istanbul demo area. Now choose the valid demo date and press <b>Find Trips in Selected Area</b>.<br><br>
+        <small>The green rectangle is the search box sent to the backend as min/max longitude and latitude.</small>
+    `);
+}
+
+function mobilityTimeOnlyFromTimestamp(value) {
+    const text = String(value || "");
+    const match = text.match(/(\d{2}:\d{2})/);
+    return match ? match[1] : "";
+}
+
+function stopMobilityAnimation() {
+    if (mobilityAnimationTimer) {
+        clearInterval(mobilityAnimationTimer);
+        mobilityAnimationTimer = null;
+    }
+    if (mobilityMovingMarker && layers.results.hasLayer(mobilityMovingMarker)) {
+        layers.results.removeLayer(mobilityMovingMarker);
+    }
+    mobilityMovingMarker = null;
+}
+
+function clearMobilityLayersOnly() {
+    stopMobilityAnimation();
+    layers.results.clearLayers();
+}
+
+function refreshMobilityAreaHint() {
+    const hint = document.getElementById("mobilityAreaHint");
+    if (!hint || !map) return;
+
+    if (mobilityAreaPicking) {
+        hint.innerHTML = mobilityAreaFirstCorner
+            ? "Click the opposite corner of the rectangle. The area between the two clicks will be searched."
+            : "Click the first corner of the rectangle on the map.";
+        return;
+    }
+
+    const b = getMobilitySearchBounds();
+    const lonWidth = Math.abs(b.getEast() - b.getWest());
+    const latHeight = Math.abs(b.getNorth() - b.getSouth());
+    const sizeWarning = mobilityAreaLooksTooLarge(b)
+        ? `<br><span style="color:#c0392b;"><b>Area is large:</b> zoom in or draw a smaller rectangle for faster results.</span>`
+        : `<br><span style="color:#16a085;"><b>Area size looks good</b> for demo search.</span>`;
+
+    if (mobilityCustomBounds) {
+        hint.innerHTML = `
+            <b>Search area:</b> custom drawn rectangle<br>
+            <small>Lon ${b.getWest().toFixed(4)} → ${b.getEast().toFixed(4)} | Lat ${b.getSouth().toFixed(4)} → ${b.getNorth().toFixed(4)}</small>
+            ${sizeWarning}
+        `;
+    } else {
+        hint.innerHTML = `
+            <b>Search area:</b> current visible map window<br>
+            <small>Zoom ${map.getZoom()} | Width ${lonWidth.toFixed(3)}° | Height ${latHeight.toFixed(3)}°</small>
+            ${sizeWarning}
+        `;
+    }
+}
+
+function enableMobilityAreaSelection() {
+    mobilityAreaPicking = true;
+    mobilityAreaFirstCorner = null;
+    mobilityCustomBounds = null;
+    layers.results.clearLayers();
+    setResult("Click two corners on the map to draw a small MobilityDB search area.");
+    refreshMobilityAreaHint();
+}
+
+function useMobilityCurrentView() {
+    mobilityAreaPicking = false;
+    mobilityAreaFirstCorner = null;
+    mobilityCustomBounds = null;
+    layers.results.clearLayers();
+    const bounds = map.getBounds();
+    drawMobilitySearchArea(bounds);
+    setResult("Mobility search area changed to the current visible map. Now press Find Trips in Selected Area.");
+    refreshMobilityAreaHint();
+}
+
+function handleMobilityAreaClick(e) {
+    if (!mobilityAreaPicking) return;
+
+    if (!mobilityAreaFirstCorner) {
+        mobilityAreaFirstCorner = e.latlng;
+        setResult("First corner selected. Click the opposite corner.");
+        refreshMobilityAreaHint();
+        return;
+    }
+
+    const second = e.latlng;
+    const south = Math.min(mobilityAreaFirstCorner.lat, second.lat);
+    const north = Math.max(mobilityAreaFirstCorner.lat, second.lat);
+    const west = Math.min(mobilityAreaFirstCorner.lng, second.lng);
+    const east = Math.max(mobilityAreaFirstCorner.lng, second.lng);
+
+    mobilityCustomBounds = L.latLngBounds([[south, west], [north, east]]);
+    mobilityAreaPicking = false;
+    mobilityAreaFirstCorner = null;
+
+    layers.results.clearLayers();
+    drawMobilitySearchArea(mobilityCustomBounds);
+    map.fitBounds(mobilityCustomBounds, { padding: [30, 30] });
+
+    setResult("Custom MobilityDB search area selected. Now press Find Trips in Selected Area.");
+    refreshMobilityAreaHint();
+}
+
+function getMobilitySearchBounds() {
+    return mobilityCustomBounds || map.getBounds();
+}
+
+function mobilityBoundsToParams(bounds) {
+    return {
+        min_lon: bounds.getWest(),
+        min_lat: bounds.getSouth(),
+        max_lon: bounds.getEast(),
+        max_lat: bounds.getNorth(),
+    };
+}
+
+function drawMobilitySearchArea(bounds) {
+    L.rectangle(bounds, {
+        color: "#16a085",
+        weight: 2,
+        fill: false,
+    }).addTo(layers.results);
+}
+
+function mobilityAreaLooksTooLarge(bounds) {
+    const lonWidth = Math.abs(bounds.getEast() - bounds.getWest());
+    const latHeight = Math.abs(bounds.getNorth() - bounds.getSouth());
+    return (lonWidth > 0.30 || latHeight > 0.20 || map.getZoom() < 11) && !mobilityCustomBounds;
+}
+
+async function getMobilityRouteLabel(routeId) {
+    const key = String(routeId || "");
+    if (!key) return "Unknown route";
+    if (mobilityRouteLabelCache.has(key)) return mobilityRouteLabelCache.get(key);
+
+    let label = `Route ${key}`;
+    try {
+        const routes = await loadAllRoutes();
+        const route = routes.find(r => String(r.route_id) === key);
+        if (route) {
+            const shortName = route.route_short_name || route.route_id;
+            const longName = route.route_long_name ? ` - ${route.route_long_name}` : "";
+            label = `${shortName}${longName}`;
+        }
+    } catch (err) {
+        // Labels are only for display. Mobility tools still work if route names cannot be loaded.
+    }
+
+    mobilityRouteLabelCache.set(key, label);
+    return label;
+}
+
+async function enrichMobilityTripLabels(trips) {
+    for (const trip of trips) {
+        trip.route_label = await getMobilityRouteLabel(trip.route_id);
+    }
+    return trips;
+}
+
+function normalizeMobilityTrip(row) {
+    return {
+        trip_id: row.trip_id,
+        route_id: row.route_id,
+        service_id: row.service_id,
+        date: row.date || getMobilitySelectedDate() || "",
+        raw: row,
+    };
+}
+
+function mergeMobilityTrips(rows) {
+    const seen = new Map();
+    rows.forEach(row => {
+        const key = `${row.trip_id}|${row.date || ""}`;
+        if (row.trip_id && !seen.has(key)) seen.set(key, row);
+    });
+    return [...seen.values()];
+}
+
+function getSelectedMobilityTrip() {
+    if (mobilitySelectedTrip) return mobilitySelectedTrip;
+
+    const select = document.getElementById("mobilityTripSelect");
+    const selectedIndex = select?.value;
+    if (selectedIndex === "" || selectedIndex === undefined) return null;
+
+    return mobilityTripsCache[Number(selectedIndex)] || null;
+}
+
+function onMobilityTripSelectChange() {
+    const select = document.getElementById("mobilityTripSelect");
+    const selectedIndex = select?.value;
+    mobilitySelectedTrip = selectedIndex === "" ? null : (mobilityTripsCache[Number(selectedIndex)] || null);
+    updateMobilitySelectedTripInfo();
+}
+
+function selectMobilityTrip(index) {
+    const select = document.getElementById("mobilityTripSelect");
+    if (select) select.value = String(index);
+    mobilitySelectedTrip = mobilityTripsCache[index] || null;
+    updateMobilitySelectedTripInfo();
+}
+
+function updateMobilitySelectedTripInfo() {
+    const box = document.getElementById("mobilitySelectedTripInfo");
+    if (!box) return;
+
+    const trip = getSelectedMobilityTrip();
+    if (!trip) {
+        box.innerHTML = "No trip selected yet.";
+        return;
+    }
+
+    box.innerHTML = `
+        <b>${escapeHtml(trip.route_label || `Route ${trip.route_id || ""}`)}</b><br>
+        Selected result #${mobilityTripsCache.indexOf(trip) + 1}<br>
+        <small>Trip ID is hidden from the normal user flow, but available in Advanced tab for testing.</small>
+    `;
+}
+
+function fillMobilityTripSelect() {
+    const select = document.getElementById("mobilityTripSelect");
+    if (!select) return;
+
+    select.innerHTML = `<option value="">Choose a found trip...</option>`;
+    mobilityTripsCache.forEach((trip, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = `${index + 1}. ${trip.route_label || `Route ${trip.route_id || ""}`}`;
+        select.appendChild(option);
+    });
+}
+
+function renderMobilityTripResults(date, bounds) {
+    fillMobilityTripSelect();
+
+    let html = `
+        <h4>MobilityDB Trips Found</h4>
+        <b>Date:</b> ${escapeHtml(date)}<br>
+        <b>Search area:</b> ${mobilityCustomBounds ? "custom drawn rectangle" : "current map view"}<br>
+        <b>Results:</b> ${mobilityTripsCache.length}<br>
+        <small>Select one result, then animate it or check its position at a time.</small>
+        <hr>
+    `;
+
+    if (!mobilityTripsCache.length) {
+        html += "No trips found. Try a different date or a slightly larger nearby area.";
+        setResult(html);
+        updateMobilitySelectedTripInfo();
+        return;
+    }
+
+    mobilityTripsCache.slice(0, 80).forEach((trip, index) => {
+        html += `
+            <div style="padding: 8px; border-bottom: 1px solid #ddd; cursor: pointer; border-left: 4px solid #16a085; margin-bottom: 4px;"
+                 onclick="selectMobilityTrip(${index})">
+                <b>${index + 1}. ${escapeHtml(trip.route_label || `Route ${trip.route_id || ""}`)}</b><br>
+                <small>Click to select this trip for animation.</small>
+            </div>
+        `;
+    });
+
+    setResult(html);
+}
+
+function buildMobilityUserError(errors) {
+    const joined = errors.filter(Boolean).join("\n");
+
+    if (joined.includes("trips_mdb") || joined.includes("does not exist")) {
+        return "MobilityDB table trips_mdb is missing. Run the MobilityDB transformation first.";
+    }
+    if (joined.includes("tuple index out of range") || joined.includes("IndexError")) {
+        return "The MobilityDB SQL function has a parameter mismatch. Replace RQuery_MobilityDB.py with the fixed version.";
+    }
+    if (joined.includes("500")) {
+        return "The backend returned an internal error. Check the FastAPI terminal for the exact SQL error.";
+    }
+
+    return joined || "MobilityDB request failed.";
+}
+
+// FUNCTION 1: Find trips in selected area. This avoids the heavy all-vehicles-at-time endpoint.
+async function findMobilityTripsInArea() {
+    const date = getMobilitySelectedDate();
+    if (!date) return setResult("Choose a service date first.");
+
+    const bounds = getMobilitySearchBounds();
+    if (mobilityAreaLooksTooLarge(bounds)) {
+        drawMobilitySearchArea(bounds);
+        return setResult(`
+            <h4>Search area is too large for a fast demo</h4>
+            Zoom in closer or press <b>Draw Area on Map</b> and select a small rectangle.<br><br>
+            This prevents slow searches over millions of MobilityDB trajectories.
+        `);
+    }
+
+    const area = mobilityBoundsToParams(bounds);
+    const url = `${API_BASE_URL}/mobilitydb/trips_in_area?` + new URLSearchParams({
+        min_lon: area.min_lon,
+        min_lat: area.min_lat,
+        max_lon: area.max_lon,
+        max_lat: area.max_lat,
+        date,
+    });
+
+    showSpinner(true);
+    clearMobilityLayersOnly();
+    drawMobilitySearchArea(bounds);
+
+    try {
+        const data = await fetchJson(url);
+        const rows = Array.isArray(data) ? data : [data];
+        const trips = mergeMobilityTrips(rows.map(normalizeMobilityTrip)).slice(0, 100);
+
+        mobilityTripsCache = await enrichMobilityTripLabels(trips);
+        mobilitySelectedTrip = mobilityTripsCache[0] || null;
+
+        if (mobilityTripsCache.length && document.getElementById("mobilityTripSelect")) {
+            fillMobilityTripSelect();
+            document.getElementById("mobilityTripSelect").value = "0";
+        }
+
+        renderMobilityTripResults(date, bounds);
+        updateMobilitySelectedTripInfo();
+
+        if (mobilityTripsCache.length) {
+            setResult(document.getElementById("resultBox").innerHTML + `
+                <hr><b>Recommended next step:</b> press <b>Show / Animate Trip</b>.
+            `);
+        }
+    } catch (err) {
+        setResult(`
+            <h4>Could not find MobilityDB trips</h4>
+            ${escapeHtml(buildMobilityUserError([err.message]))}<br><br>
+            <b>Try this:</b><br>
+            1. Use the demo date <b>${escapeHtml(date)}</b><br>
+            2. Press <b>Go to Demo Area</b><br>
+            3. Press <b>Find Trips in Selected Area</b> again<br>
+            4. If still empty, draw a slightly larger rectangle.
+        `);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+function extractLatLonFromMobilityRow(row) {
+    if (!row) return null;
+
+    if (row.lat !== undefined && row.lon !== undefined && row.lat !== null && row.lon !== null) {
+        const lat = Number(row.lat);
+        const lon = Number(row.lon);
+        if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon };
+    }
+
+    const geojson = row.geojson || row.position?.geojson || row.position;
+    if (geojson && typeof geojson === "object") {
+        const coords = geojson.coordinates || geojson.geometry?.coordinates;
+        if (Array.isArray(coords) && coords.length >= 2) {
+            const lon = Number(coords[0]);
+            const lat = Number(coords[1]);
+            if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon };
+        }
+    }
+
+    const text = typeof geojson === "string" ? geojson : JSON.stringify(row.position || row || "");
+    const pointMatch = text.match(/POINT\s*\(?\s*([+-]?\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)/i);
+    if (pointMatch) {
+        const lon = Number(pointMatch[1]);
+        const lat = Number(pointMatch[2]);
+        if (!Number.isNaN(lat) && !Number.isNaN(lon)) return { lat, lon };
+    }
+
+    return null;
+}
+
+function getPositionsFromAnimatedResponse(data, selectedDate) {
+    const rows = Array.isArray(data) ? data : [data];
+    const chosen = rows.find(item => selectedDate && String(item.date) === String(selectedDate)) || rows[0];
+    return {
+        row: chosen,
+        positions: (chosen?.positions || [])
+            .map(p => ({ lat: Number(p.lat), lon: Number(p.lon), time: p.time }))
+            .filter(p => !Number.isNaN(p.lat) && !Number.isNaN(p.lon)),
+    };
+}
+
+function decimatePositions(positions, maxPoints = 900) {
+    if (positions.length <= maxPoints) return positions;
+    const step = Math.ceil(positions.length / maxPoints);
+    return positions.filter((_, index) => index % step === 0 || index === positions.length - 1);
+}
+
+function drawMobilityTrajectory(positions, routeLabel) {
+    const displayPositions = decimatePositions(positions, 900);
+    const latlngs = displayPositions.map(p => [p.lat, p.lon]);
+    if (!latlngs.length) return null;
+
+    const line = L.polyline(latlngs, {
+        color: "#8e44ad",
+        weight: 4,
+        opacity: 0.85,
+    }).addTo(layers.results);
+
+    L.circleMarker(latlngs[0], {
+        radius: 7,
+        color: "#27ae60",
+        weight: 2,
+        fillOpacity: 0.9,
+    }).bindPopup(`<b>Start</b><br>${escapeHtml(routeLabel)}<br>${escapeHtml(displayPositions[0].time || "")}`).addTo(layers.results);
+
+    L.circleMarker(latlngs[latlngs.length - 1], {
+        radius: 7,
+        color: "#c0392b",
+        weight: 2,
+        fillOpacity: 0.9,
+    }).bindPopup(`<b>End</b><br>${escapeHtml(routeLabel)}<br>${escapeHtml(displayPositions[displayPositions.length - 1].time || "")}`).addTo(layers.results);
+
+    return { line, latlngs, displayPositions };
+}
+
+function animateMobilityMarker(latlngs) {
+    if (!latlngs.length) return;
+
+    mobilityMovingMarker = L.marker(latlngs[0]).addTo(layers.results);
+    let i = 0;
+    const step = Math.max(1, Math.floor(latlngs.length / 120));
+
+    mobilityAnimationTimer = setInterval(() => {
+        if (i >= latlngs.length) {
+            clearInterval(mobilityAnimationTimer);
+            mobilityAnimationTimer = null;
+            return;
+        }
+        mobilityMovingMarker.setLatLng(latlngs[i]);
+        i += step;
+    }, 100);
+}
+
+// FUNCTION 2: Animate selected trip.
+async function showSelectedMobilityTrajectory() {
+    const trip = getSelectedMobilityTrip();
+    if (!trip) return setResult("Find trips first, then choose one from the dropdown or result list.");
+
+    showSpinner(true);
+    clearMobilityLayersOnly();
+
+    try {
+        const data = await fetchJson(`${API_BASE_URL}/mobilitydb/animated_vehicle_positions?trip_id=${encodeURIComponent(trip.trip_id)}`);
+        const { row, positions } = getPositionsFromAnimatedResponse(data, trip.date || getMobilitySelectedDate());
+
+        if (!positions.length) {
+            return setResult("The selected trip was found, but the backend did not return movement points for animation.");
+        }
+
+        const routeLabel = trip.route_label || await getMobilityRouteLabel(row?.route_id || trip.route_id);
+        const drawn = drawMobilityTrajectory(positions, routeLabel);
+        if (!drawn) return setResult("Movement points were returned, but no valid map coordinates were found.");
+
+        animateMobilityMarker(drawn.latlngs);
+
+        const bounds = drawn.line.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [35, 35] });
+
+        const firstTime = mobilityTimeOnlyFromTimestamp(positions[0]?.time);
+        if (firstTime && document.getElementById("mobilityPositionTime")) {
+            document.getElementById("mobilityPositionTime").value = firstTime;
+        }
+
+        setResult(`
+            <h4>Trip Movement Animation</h4>
+            <b>Route:</b> ${escapeHtml(routeLabel)}<br>
+            <b>Original movement points:</b> ${positions.length}<br>
+            <b>Displayed map points:</b> ${drawn.displayPositions.length}<br>
+            <b>Start:</b> ${escapeHtml(positions[0]?.time || "")}<br>
+            <b>End:</b> ${escapeHtml(positions[positions.length - 1]?.time || "")}<br>
+            <small>Purple line = trip trajectory, green = start, red = end, moving marker = animation.</small>
+        `);
+    } catch (err) {
+        setResult(`<h4>Could not animate movement</h4>${escapeHtml(buildMobilityUserError([err.message]))}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+function findNearestAnimatedPosition(positions, targetTime) {
+    const target = String(targetTime || "").match(/(\d{2}):(\d{2})/);
+    if (!target || !positions.length) return positions[0] || null;
+    const targetMinutes = Number(target[1]) * 60 + Number(target[2]);
+
+    let best = null;
+    let bestDiff = Infinity;
+    positions.forEach(p => {
+        const match = String(p.time || "").match(/(\d{2}):(\d{2})/);
+        if (!match) return;
+        const minutes = Number(match[1]) * 60 + Number(match[2]);
+        const diff = Math.abs(minutes - targetMinutes);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = p;
+        }
+    });
+    return best || positions[0] || null;
+}
+
+// FUNCTION 3: Position of selected trip at chosen time.
+async function showMobilityPositionAtTime() {
+    const trip = getSelectedMobilityTrip();
+    if (!trip) return setResult("Find trips first, then choose one from the dropdown or result list.");
+
+    const date = trip.date || getMobilitySelectedDate();
+    const time = document.getElementById("mobilityPositionTime")?.value;
+    const timestamp = mobilityTimestamp(date, time);
+    if (!timestamp) return setResult("Choose a time first.");
+
+    showSpinner(true);
+    stopMobilityAnimation();
+
+    try {
+        let point = null;
+        let exact = true;
+        let returnedTime = "";
+        let routeLabel = trip.route_label || await getMobilityRouteLabel(trip.route_id);
+
+        try {
+            const data = await fetchJson(`${API_BASE_URL}/mobilitydb/vehicle_position_at_time?trip_id=${encodeURIComponent(trip.trip_id)}&timestamp=${encodeURIComponent(timestamp)}`);
+            const rows = Array.isArray(data) ? data : [data];
+            const row = rows.find(item => extractLatLonFromMobilityRow(item)) || rows[0];
+            point = extractLatLonFromMobilityRow(row);
+            if (row?.route_id) routeLabel = await getMobilityRouteLabel(row.route_id);
+        } catch (err) {
+            console.warn("Exact MobilityDB position endpoint failed. Using animation fallback.", err);
+        }
+
+        if (!point) {
+            exact = false;
+            const data = await fetchJson(`${API_BASE_URL}/mobilitydb/animated_vehicle_positions?trip_id=${encodeURIComponent(trip.trip_id)}`);
+            const { positions } = getPositionsFromAnimatedResponse(data, date);
+            const nearest = findNearestAnimatedPosition(positions, time);
+            if (nearest) {
+                point = { lat: Number(nearest.lat), lon: Number(nearest.lon) };
+                returnedTime = nearest.time || "";
+            }
+        }
+
+        if (!point || Number.isNaN(point.lat) || Number.isNaN(point.lon)) {
+            return setResult("No valid vehicle position was found at this time. Try a time inside the trip movement period.");
+        }
+
+        L.circleMarker([point.lat, point.lon], {
+            radius: 10,
+            color: "#e67e22",
+            weight: 3,
+            fillOpacity: 0.95,
+        }).bindPopup(`
+            <b>${exact ? "Vehicle position" : "Nearest available position"}</b><br>
+            ${escapeHtml(routeLabel)}<br>
+            ${escapeHtml(time)}
+        `).addTo(layers.results);
+
+        map.setView([point.lat, point.lon], Math.max(map.getZoom(), 14));
+
+        setResult(`
+            <h4>${exact ? "Vehicle Position at Time" : "Nearest Vehicle Position"}</h4>
+            <b>Route:</b> ${escapeHtml(routeLabel)}<br>
+            <b>Requested time:</b> ${escapeHtml(time)}<br>
+            ${returnedTime ? `<b>Nearest returned time:</b> ${escapeHtml(returnedTime)}<br>` : ""}
+            <b>Latitude:</b> ${Number(point.lat).toFixed(6)}<br>
+            <b>Longitude:</b> ${Number(point.lon).toFixed(6)}<br>
+            <small>${exact ? "Orange marker shows the valueAtTimestamp result." : "Exact endpoint did not return coordinates, so the closest trip point was used."}</small>
+        `);
+    } catch (err) {
+        setResult(`<h4>Could not show position</h4>${escapeHtml(buildMobilityUserError([err.message]))}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+// Backward-compatible names in case old buttons still exist somewhere.
+function loadMobilityCurrentWindow() { return findMobilityTripsInArea(); }
+function loadMobilityTrajectories() { return showSelectedMobilityTrajectory(); }
+function loadMobilityAtTime() { return showMobilityPositionAtTime(); }
+function loadMobilityWindow() { return findMobilityTripsInArea(); }
+
+
+// ==================== ADVANCED DEVELOPER RAW TESTS ====================
+// These functions keep the public tabs user-friendly, while the Advanced tab can still test raw backend endpoints.
+
+function devValue(id, fallback = "") {
+    const value = document.getElementById(id)?.value?.trim();
+    return value || fallback;
+}
+
+function devRequire(id, message) {
+    const value = devValue(id);
+    if (!value) {
+        setResult(message);
+        return null;
+    }
+    return value;
+}
+
+function devShowRaw(title, url, data) {
+    const safeUrl = escapeHtml(url);
+    const safeJson = escapeHtml(JSON.stringify(data, null, 2));
+    setResult(`
+        <h4>${escapeHtml(title)}</h4>
+        <small><b>Endpoint:</b> ${safeUrl}</small>
+        <pre style="white-space: pre-wrap; max-height: 360px; overflow: auto; background: #f4f6f8; padding: 8px; border-radius: 6px; margin-top: 8px;">${safeJson}</pre>
+    `);
+}
+
+function devGetRows(data) {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.stops)) return data.stops;
+    if (Array.isArray(data.routes)) return data.routes;
+    if (Array.isArray(data.positions)) return data.positions;
+    return [data];
+}
+
+function devExtractPoint(row) {
+    if (!row) return null;
+
+    if (typeof extractLatLonFromMobilityRow === "function") {
+        const mobilityPoint = extractLatLonFromMobilityRow(row);
+        if (mobilityPoint) return mobilityPoint;
+    }
+
+    const lat = row.stop_lat ?? row.lat ?? row.latitude;
+    const lon = row.stop_lon ?? row.lon ?? row.longitude;
+    if (lat !== undefined && lon !== undefined && lat !== null && lon !== null) {
+        const nLat = Number(lat);
+        const nLon = Number(lon);
+        if (!Number.isNaN(nLat) && !Number.isNaN(nLon)) return { lat: nLat, lon: nLon };
+    }
+
+    return null;
+}
+
+function devDrawPointRows(data, popupTitle = "Result") {
+    const rows = devGetRows(data);
+    const points = rows
+        .map((row, index) => ({ row, index, point: devExtractPoint(row) }))
+        .filter(item => item.point);
+
+    if (!points.length) return;
+
+    points.forEach(({ row, index, point }) => {
+        const name = row.stop_name || row.trip_id || row.route_id || `${popupTitle} ${index + 1}`;
+        L.circleMarker([point.lat, point.lon], {
+            radius: 7,
+            color: "#34495e",
+            weight: 2,
+            fillOpacity: 0.8,
+        })
+            .bindPopup(`<b>${escapeHtml(name)}</b><br>Lat: ${point.lat}<br>Lon: ${point.lon}`)
+            .addTo(layers.results);
+    });
+
+    const bounds = L.latLngBounds(points.map(item => [item.point.lat, item.point.lon]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+}
+
+function devDrawAnimatedResponse(data) {
+    const rows = Array.isArray(data) ? data : [data];
+    const row = rows.find(r => Array.isArray(r.positions) && r.positions.length) || rows[0];
+    const positions = (row?.positions || [])
+        .map(p => ({ lat: Number(p.lat), lon: Number(p.lon), time: p.time }))
+        .filter(p => !Number.isNaN(p.lat) && !Number.isNaN(p.lon));
+
+    if (!positions.length) return;
+
+    const latlngs = positions.map(p => [p.lat, p.lon]);
+    L.polyline(latlngs, { color: "#8e44ad", weight: 4, opacity: 0.85 }).addTo(layers.results);
+    L.circleMarker(latlngs[0], { radius: 7, color: "#27ae60", weight: 2, fillOpacity: 0.9 })
+        .bindPopup(`<b>Start</b><br>${escapeHtml(positions[0].time || "")}`)
+        .addTo(layers.results);
+    L.circleMarker(latlngs[latlngs.length - 1], { radius: 7, color: "#c0392b", weight: 2, fillOpacity: 0.9 })
+        .bindPopup(`<b>End</b><br>${escapeHtml(positions[positions.length - 1].time || "")}`)
+        .addTo(layers.results);
+
+    const bounds = L.latLngBounds(latlngs);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+}
+
+async function devFetchAndShow(title, path, drawMode = "points") {
+    const url = `${API_BASE_URL}${path}`;
+    showSpinner(true);
+    layers.results.clearLayers();
+    try {
+        const data = await fetchJson(url);
+        if (drawMode === "animated") devDrawAnimatedResponse(data);
+        else if (drawMode === "points") devDrawPointRows(data, title);
+        devShowRaw(title, path, data);
+    } catch (err) {
+        setResult(`<h4>${escapeHtml(title)} failed</h4>${escapeHtml(err.message)}`);
+    } finally {
+        showSpinner(false);
+    }
+}
+
+async function devGetStopById() {
+    const stopId = devRequire("devStopId", "Enter a Stop ID first.");
+    if (!stopId) return;
+    return devFetchAndShow("GET Stop by ID", `/explorer/${encodeURIComponent(stopId)}`, "points");
+}
+
+async function devGetStopByCode() {
+    const code = devRequire("devStopCode", "Enter a Stop Code first.");
+    if (!code) return;
+    return devFetchAndShow("GET Stop by Code", `/advanced/${encodeURIComponent(code)}`, "points");
+}
+
+async function devShowRouteById() {
+    const routeId = devRequire("devRouteId", "Enter a Route ID first.");
+    if (!routeId) return;
+    return devFetchAndShow("GET Route by ID", `/explorer/route/${encodeURIComponent(routeId)}`, "points");
+}
+
+async function devLoadTopRoutes() {
+    const limit = devValue("devTopRoutesLimit", "10");
+    return devFetchAndShow("GET Top Routes", `/advanced/top-routes?limit=${encodeURIComponent(limit)}`, "none");
+}
+
+async function devRunDijkstra() {
+    const start = devRequire("devPathStart", "Enter the Start Stop ID first.");
+    const end = devRequire("devPathEnd", "Enter the End Stop ID first.");
+    if (!start || !end) return;
+    return devFetchAndShow("GET Dijkstra", `/routes/dijkstra?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`, "none");
+}
+
+async function devRunAStar() {
+    const start = devRequire("devPathStart", "Enter the Start Stop ID first.");
+    const end = devRequire("devPathEnd", "Enter the End Stop ID first.");
+    if (!start || !end) return;
+    return devFetchAndShow("GET A*", `/routes/astar?start_id=${encodeURIComponent(start)}&end_id=${encodeURIComponent(end)}`, "none");
+}
+
+async function devNearestStops() {
+    const lat = devRequire("devNearLat", "Enter latitude first.");
+    const lon = devRequire("devNearLon", "Enter longitude first.");
+    const radius = devValue("devNearRadius", "500");
+    if (!lat || !lon) return;
+    return devFetchAndShow("GET Nearest Stops", `/spail-tools/nearest?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`, "points");
+}
+
+function devFillAreaFromCurrentMap() {
+    const b = map.getBounds();
+    document.getElementById("devMinLon").value = b.getWest().toFixed(6);
+    document.getElementById("devMinLat").value = b.getSouth().toFixed(6);
+    document.getElementById("devMaxLon").value = b.getEast().toFixed(6);
+    document.getElementById("devMaxLat").value = b.getNorth().toFixed(6);
+    setResult("Spatial area fields were filled from the current map view.");
+}
+
+async function devStopsInArea() {
+    const minLon = devRequire("devMinLon", "Enter min longitude first, or press Fill Current Map Bounds.");
+    const minLat = devRequire("devMinLat", "Enter min latitude first, or press Fill Current Map Bounds.");
+    const maxLon = devRequire("devMaxLon", "Enter max longitude first, or press Fill Current Map Bounds.");
+    const maxLat = devRequire("devMaxLat", "Enter max latitude first, or press Fill Current Map Bounds.");
+    if (!minLon || !minLat || !maxLon || !maxLat) return;
+    return devFetchAndShow("GET Stops in Area", `/spail-tools/inarea?min_lat=${encodeURIComponent(minLat)}&max_lat=${encodeURIComponent(maxLat)}&min_lon=${encodeURIComponent(minLon)}&max_lon=${encodeURIComponent(maxLon)}`, "points");
+}
+
+async function devBusiestStops() {
+    const startHour = devValue("devBusyStart", "6");
+    const endHour = devValue("devBusyEnd", "9");
+    return devFetchAndShow("GET Busiest Stops", `/spail-tools/busy?start_time=${encodeURIComponent(startHour)}&end_time=${encodeURIComponent(endHour)}`, "points");
+}
+
+function devFillMobilityBoundsFromCurrentMap() {
+    const b = map.getBounds();
+    document.getElementById("devMobMinLon").value = b.getWest().toFixed(6);
+    document.getElementById("devMobMinLat").value = b.getSouth().toFixed(6);
+    document.getElementById("devMobMaxLon").value = b.getEast().toFixed(6);
+    document.getElementById("devMobMaxLat").value = b.getNorth().toFixed(6);
+    setResult("MobilityDB area fields were filled from the current map view.");
+}
+
+function devApplyMobilityDemoDate() {
+    const date = getMobilitySelectedDate() || MOBILITY_VALID_DEMO_DATES[0];
+    const time = document.getElementById("mobilityPositionTime")?.value || "08:15";
+
+    const devDate = document.getElementById("devMobilityDate");
+    const devStart = document.getElementById("devMobilityStartTs");
+    const devEnd = document.getElementById("devMobilityEndTs");
+    const devPos = document.getElementById("devMobPositionTs");
+
+    if (devDate) devDate.value = date;
+    if (devStart) devStart.value = `${date} 08:00:00+03`;
+    if (devEnd) devEnd.value = `${date} 08:30:00+03`;
+    if (devPos) devPos.value = `${date} ${time}:00+03`;
+
+    setResult(`Advanced MobilityDB test fields were filled with valid demo date ${date}.`);
+}
+
+async function devMobilityAllPositionsAtTime() {
+    const date = devRequire("devMobilityDate", "Enter date first, for example 2023-05-02.");
+    const startTs = devRequire("devMobilityStartTs", "Enter start timestamp first.");
+    const endTs = devRequire("devMobilityEndTs", "Enter end timestamp first.");
+    if (!date || !startTs || !endTs) return;
+
+    const ok = confirm(
+        "This raw endpoint can be slow on the full MobilityDB table. For the demo, use the smaller trips_mdb table or a short time range. Continue?"
+    );
+    if (!ok) return;
+
+    return devFetchAndShow(
+        "GET All Vehicle Positions at Time",
+        `/mobilitydb/all_vehicle_positions_at_time?date=${encodeURIComponent(date)}&start_timestamp=${encodeURIComponent(startTs)}&end_timestamp=${encodeURIComponent(endTs)}`,
+        "points"
+    );
+}
+
+async function devMobilityTripsInArea() {
+    const minLon = devRequire("devMobMinLon", "Enter min longitude first, or press Fill Current Map Bounds.");
+    const minLat = devRequire("devMobMinLat", "Enter min latitude first, or press Fill Current Map Bounds.");
+    const maxLon = devRequire("devMobMaxLon", "Enter max longitude first, or press Fill Current Map Bounds.");
+    const maxLat = devRequire("devMobMaxLat", "Enter max latitude first, or press Fill Current Map Bounds.");
+    const date = devRequire("devMobilityDate", "Enter date first, for example 2023-05-02.");
+    if (!minLon || !minLat || !maxLon || !maxLat || !date) return;
+    return devFetchAndShow(
+        "GET Trips in Area",
+        `/mobilitydb/trips_in_area?min_lon=${encodeURIComponent(minLon)}&min_lat=${encodeURIComponent(minLat)}&max_lon=${encodeURIComponent(maxLon)}&max_lat=${encodeURIComponent(maxLat)}&date=${encodeURIComponent(date)}`,
+        "none"
+    );
+}
+
+async function devMobilityAnimatedPositions() {
+    const tripId = devRequire("devMobTripId", "Enter Trip ID first.");
+    if (!tripId) return;
+    return devFetchAndShow("GET Animated Positions", `/mobilitydb/animated_vehicle_positions?trip_id=${encodeURIComponent(tripId)}`, "animated");
+}
+
+async function devMobilityPositionAtTime() {
+    const tripId = devRequire("devMobTripId", "Enter Trip ID first.");
+    const timestamp = devRequire("devMobPositionTs", "Enter timestamp first.");
+    if (!tripId || !timestamp) return;
+    return devFetchAndShow(
+        "GET Vehicle Position at Time",
+        `/mobilitydb/vehicle_position_at_time?trip_id=${encodeURIComponent(tripId)}&timestamp=${encodeURIComponent(timestamp)}`,
+        "points"
+    );
+}
+

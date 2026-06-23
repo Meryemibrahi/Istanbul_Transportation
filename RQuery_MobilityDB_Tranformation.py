@@ -15,7 +15,7 @@ def servis_id_table():
     ));"""
 
 def create_trips_stops_table():
-    return """"
+    return """
     DROP TABLE IF EXISTS trip_stops;
     CREATE TABLE trip_stops (
     trip_id text,
