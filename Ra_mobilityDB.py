@@ -26,12 +26,6 @@ def animated_positions(trip_id: str):
         raise HTTPException(status_code=404, detail="No positions found for the given trip")
     return positions
 
-@router.get("/distance_traveled")
-def distance_traveled(trip_id: str):
-    distance = get_distance_traveled(trip_id)
-    if not distance:
-        raise HTTPException(status_code=404, detail="No distance data found for the given trip")
-    return distance
 
 @router.get("/trips_in_area")
 def trips_in_area(min_lon: float, min_lat: float, max_lon: float,
