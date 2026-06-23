@@ -9,6 +9,8 @@ import pandas as pd
 import logging
 from dotenv import load_dotenv
 
+from database_Creation import connect_Database
+
 from RQuery_table_creation import (
     create_stop_vertices_table,
     firststep_transit_edges,
@@ -49,21 +51,12 @@ def read_csv(file_path):
 
     raise last_error
 
-def get_connection():
-    return psycopg2.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        dbname=os.getenv("DB_NAME", "gtfs_db"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD")
-    )
-
 def load_csv_to_table(csv_file, table_name):
     try:
         logger.info(f"Loading {csv_file} into {table_name}...")
         
         df = read_csv(f"data/{csv_file}")        
-        conn = get_connection()
+        conn = connect_Database()
         cur = conn.cursor()
         
         cur.execute(f"TRUNCATE TABLE {table_name};")
@@ -88,7 +81,7 @@ def other_functions():
     try:
         logger.info(f"Creating more tables and indexes...")
             
-        conn = get_connection()
+        conn = connect_Database()
         cur = conn.cursor()
 
         cur.execute(add_time_to_seconds_function())

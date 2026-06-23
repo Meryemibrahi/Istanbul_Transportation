@@ -30,6 +30,7 @@ def enable_postgres_extensions(conn):
         "CREATE EXTENSION IF NOT EXISTS postgis;",
         "CREATE EXTENSION IF NOT EXISTS pgrouting;"
         "CREATE EXTENSION IF NOT EXISTS mobility;"
+        "CREATE EXTENSION IF NOT EXISTS mobilityDB;"
     ]
 
     with conn.cursor() as cur:
