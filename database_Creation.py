@@ -10,7 +10,6 @@ import psycopg2.extras
 import logging
 
 from typing import Optional, List, Dict, Any
-from configuration import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -73,5 +72,4 @@ def test_database_connection():
 
 
 if __name__ == '__main__':
-    load_config()
     connect_Database()

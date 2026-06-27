@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
         test_database_connection()
         logger.info("Database connection successful")
         logger.info("Loading GTFS data...")
-        # load_gtfs_data()
+        #load_gtfs_data()
         logger.info("GTFS data loaded successfully")
     except Exception as e:
         logger.error(f"Startup failed: {e}")
